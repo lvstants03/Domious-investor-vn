@@ -1,0 +1,17 @@
+fastapi>=0.111.0
+uvicorn[standard]
+httpx
+websockets
+sqlalchemy[asyncio]>=2.0
+asyncpg
+alembic
+redis[asyncio]
+apscheduler<4.0
+pandas
+# pandas-ta
+pydantic-settings
+python-jose[cryptography]
+aiohttp
+vnstock>=3.0
+optuna
+scipy

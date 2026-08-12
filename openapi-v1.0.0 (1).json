@@ -1,0 +1,3844 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "TCBS iFlash Open API",
+    "description": "REST APIs for trading stocks and derivatives on TCBS.",
+    "version": "1.0.0",
+    "contact": {
+      "email": "openapi@tcbs.com.vn"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://openapi.tcbs.com.vn",
+      "description": "Production"
+    }
+  ],
+  "paths": {
+    "/eros/v2/get-profile/by-username/{custodyCode}": {
+      "get": {
+        "summary": "Sub account information",
+        "description": "Get sub-account information.",
+        "parameters": [
+          {
+            "name": "custodyCode",
+            "in": "path",
+            "required": true,
+            "description": "Custody account number, e.g. 105C334455.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fields",
+            "in": "query",
+            "required": true,
+            "description": "List of information to get, e.g. basicInfo,bankSubAccounts.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "basicInfo": {
+                      "type": "object",
+                      "description": "Basic account information."
+                    },
+                    "bankSubAccounts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      },
+                      "description": "List of sub-accounts."
+                    },
+                    "bankSubAccounts[].accountNo": {
+                      "type": "string",
+                      "description": "Sub-account number."
+                    },
+                    "bankSubAccounts[].accountName": {
+                      "type": "string",
+                      "description": "Account holder name."
+                    },
+                    "bankSubAccounts[].bankCode": {
+                      "type": "string",
+                      "description": "Bank code (may be null)."
+                    },
+                    "bankSubAccounts[].accountType": {
+                      "type": "string",
+                      "description": "Sub-account type: NORMAL, MARGIN, DERIVATIVE."
+                    },
+                    "bankSubAccounts[].accountTypeName": {
+                      "type": "string",
+                      "description": "Sub-account type name."
+                    },
+                    "bankSubAccounts[].status": {
+                      "type": "string",
+                      "description": "Sub-account status."
+                    },
+                    "bankSubAccounts[].isDefault": {
+                      "type": "string",
+                      "description": "Whether this is the default sub-account (Y/N)."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/gaia/v1/oauth2/openapi/token": {
+      "post": {
+        "summary": "Exchange API Key for JWT",
+        "description": "Exchange your API Key for a JWT access token.",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string",
+                      "description": "JWT token for subsequent requests."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "apiKey": {
+                    "type": "string",
+                    "description": "API Key generated on TCInvest."
+                  },
+                  "otp": {
+                    "type": "string",
+                    "description": "OTP code from TCInvest app."
+                  },
+                  "otpId": {
+                    "type": "string",
+                    "description": "OTP ID returned from Step 1."
+                  }
+                },
+                "required": [
+                  "apiKey",
+                  "otp"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/gaia/v1/oauth2/openapi/request-otp": {
+      "post": {
+        "summary": "Exchange API Key for JWT (request-otp)",
+        "description": "Exchange your API Key for a JWT access token.",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "otpId": {
+                      "type": "string",
+                      "description": "OTP identifier, used in Step 2 to exchange for token."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "apiKey": {
+                    "type": "string",
+                    "description": "API Key generated on TCInvest."
+                  }
+                },
+                "required": [
+                  "apiKey"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/khronos/v1/account/status": {
+      "get": {
+        "summary": "Money & margin overview",
+        "description": "Derivative money and margin overview.",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "query",
+            "required": true,
+            "description": "Custody account number.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "subAccountId",
+            "in": "query",
+            "required": true,
+            "description": "Derivative sub-account.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "getType",
+            "in": "query",
+            "required": true,
+            "description": "0 = get all, 1 = money only.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "cmd": {
+                      "type": "string",
+                      "description": "Response command name."
+                    },
+                    "rc": {
+                      "type": "string",
+                      "description": "Result code, 1 = success."
+                    },
+                    "data": {
+                      "type": "object",
+                      "description": "Money and margin overview data."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/khronos/v1/order/condition/cancel": {
+      "post": {
+        "summary": "Cancel condition order (derivative)",
+        "description": "Cancel a conditional derivative order.",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "rc": {
+                      "type": "string",
+                      "description": "Result code, 1 = success."
+                    },
+                    "rs": {
+                      "type": "string",
+                      "description": "Error detail (if any)."
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      },
+                      "description": "Empty array if successful."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "accountId": {
+                    "type": "string",
+                    "description": "Custody account number."
+                  },
+                  "subAccountId": {
+                    "type": "string",
+                    "description": "Derivative sub-account number."
+                  },
+                  "orderNo": {
+                    "type": "string",
+                    "description": "pk_orderNo from the conditional order book API."
+                  }
+                },
+                "required": [
+                  "accountId",
+                  "orderNo"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/khronos/v1/order/cancel": {
+      "post": {
+        "summary": "Cancel normal order (derivative)",
+        "description": "Cancel a normal derivative order.",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "rc": {
+                      "type": "string",
+                      "description": "Result code, 1 = success."
+                    },
+                    "data[].orderNo": {
+                      "type": "string",
+                      "description": "Order number."
+                    },
+                    "data[].status": {
+                      "type": "string",
+                      "description": "Status (PW = pending withdrawal)."
+                    },
+                    "data[].pk_orderNo": {
+                      "type": "string",
+                      "description": "Order key."
+                    },
+                    "data[].cancelTime": {
+                      "type": "string",
+                      "description": "Cancel time."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "accountId": {
+                    "type": "string",
+                    "description": "Custody account number."
+                  },
+                  "orderNo": {
+                    "type": "string",
+                    "description": "orderNo from the normal order book API."
+                  },
+                  "cmd": {
+                    "type": "string",
+                    "description": "Web.cancelOrder."
+                  },
+                  "pin": {
+                    "type": "string",
+                    "description": "Order channel (F)."
+                  },
+                  "refId": {
+                    "type": "string",
+                    "description": "Reference ID."
+                  }
+                },
+                "required": [
+                  "accountId",
+                  "orderNo"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/khronos/v1/order/condition/detail": {
+      "get": {
+        "summary": "Get condition order book (derivative)",
+        "description": "Query the derivative conditional order book.",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "query",
+            "required": true,
+            "description": "Custody account number.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "subAccountID",
+            "in": "query",
+            "required": true,
+            "description": "Derivative account number.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageNo",
+            "in": "query",
+            "required": true,
+            "description": "Page number.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "PageSize",
+            "in": "query",
+            "required": true,
+            "description": "Page size.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "orderStatus",
+            "in": "query",
+            "required": true,
+            "description": "0 = all, 1 = waiting, 2 = activated, 3 = rejected.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "orderType",
+            "in": "query",
+            "required": true,
+            "description": "'' = all, 3 = Arbitrage, 4 = SL/TP, 5 = Stop order.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Symbol",
+            "in": "query",
+            "required": true,
+            "description": "Filter: ALL,ALL = all; VN30F2303,B = by symbol.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "rc": {
+                      "type": "string",
+                      "description": "Result code, 1 = success."
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      },
+                      "description": "List of conditional orders."
+                    },
+                    "data[].orderNo": {
+                      "type": "string",
+                      "description": "Order number."
+                    },
+                    "data[].pk_orderNo": {
+                      "type": "string",
+                      "description": "Order key."
+                    },
+                    "data[].side": {
+                      "type": "string",
+                      "description": "B = Long, S = Short."
+                    },
+                    "data[].symbol": {
+                      "type": "string",
+                      "description": "Contract code."
+                    },
+                    "data[].showPrice": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Order price."
+                    },
+                    "data[].volume": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Order volume."
+                    },
+                    "data[].soPrice": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Stop price."
+                    },
+                    "data[].orderType": {
+                      "type": "string",
+                      "description": "SL = price >=, SU = price <=."
+                    },
+                    "data[].status": {
+                      "type": "string",
+                      "description": "0 = pending, 1 = activated, 2 = canceled, 3 = rejected."
+                    },
+                    "data[].notes": {
+                      "type": "string",
+                      "description": "Order type: SL/TP, Stop order, Arbitrage."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/khronos/v1/order/in-day": {
+      "get": {
+        "summary": "Get normal order book (derivative)",
+        "description": "Query the derivative normal order book.",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "query",
+            "required": true,
+            "description": "Custody account number.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageNo",
+            "in": "query",
+            "required": true,
+            "description": "Page number.",
+            "schema": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": true,
+            "description": "Page size.",
+            "schema": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          {
+            "name": "symbol",
+            "in": "query",
+            "required": true,
+            "description": "Filter: ALL,ALL = all; VN30F2303,B = by symbol; ALL,B = by L/S.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "orderType",
+            "in": "query",
+            "required": true,
+            "description": "Filter order type: '' = all, 3 = Arbitrage, 4 = SL/TP, 5 = ForceClose, 6 = Normal.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": true,
+            "description": "0 = all, 1 = waiting, 2 = matched.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "refId",
+            "in": "query",
+            "required": false,
+            "description": "Order ref ID.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "rc": {
+                      "type": "string",
+                      "description": "Result code, 1 = success."
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      },
+                      "description": "List of normal orders."
+                    },
+                    "data[].orderNo": {
+                      "type": "string",
+                      "description": "Order number."
+                    },
+                    "data[].pk_orderNo": {
+                      "type": "string",
+                      "description": "Order key."
+                    },
+                    "data[].side": {
+                      "type": "string",
+                      "description": "B = Long, S = Short."
+                    },
+                    "data[].symbol": {
+                      "type": "string",
+                      "description": "Contract code."
+                    },
+                    "data[].volume": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Order volume."
+                    },
+                    "data[].showPrice": {
+                      "type": "string",
+                      "description": "Order price."
+                    },
+                    "data[].matchVolume": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Matched volume."
+                    },
+                    "data[].status": {
+                      "type": "string",
+                      "description": "Order status."
+                    },
+                    "data[].isCancel": {
+                      "type": "string",
+                      "description": "0 = cannot cancel, 1 = can cancel."
+                    },
+                    "data[].isAmend": {
+                      "type": "string",
+                      "description": "0 = cannot amend, 1 = can amend."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tartarus/v1/derivatives": {
+      "get": {
+        "summary": "Symbol & price info (derivative)",
+        "description": "Get derivative market symbol and price information.",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      },
+                      "description": "List of derivative contracts."
+                    },
+                    "data[].symbol": {
+                      "type": "string",
+                      "description": "Contract symbol."
+                    },
+                    "data[].ceilPrice": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Ceiling price."
+                    },
+                    "data[].floorPrice": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Floor price."
+                    },
+                    "data[].refPrice": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Reference price."
+                    },
+                    "data[].bidPrice01": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Bid price 1."
+                    },
+                    "data[].bidQtty01": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Bid volume 1."
+                    },
+                    "data[].offerPrice01": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Offer price 1."
+                    },
+                    "data[].offerQtty01": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Offer volume 1."
+                    },
+                    "data[].matchPrice": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Matched price."
+                    },
+                    "data[].matchQtty": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Matched volume."
+                    },
+                    "data[].change": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Price change."
+                    },
+                    "data[].changePercent": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Change percent."
+                    },
+                    "data[].totalVol": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Total volume."
+                    },
+                    "data[].openVol": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Open interest."
+                    },
+                    "data[].expiryDate": {
+                      "type": "string",
+                      "description": "Expiry date."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/khronos/v1/order/condition/place": {
+      "post": {
+        "summary": "Place condition order (derivative)",
+        "description": "Place a conditional derivative order.",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "rc": {
+                      "type": "string",
+                      "description": "Result code, 1 = success."
+                    },
+                    "data[].symbol": {
+                      "type": "string",
+                      "description": "Contract code."
+                    },
+                    "data[].status": {
+                      "type": "string",
+                      "description": "Order status."
+                    },
+                    "data[].orderNo": {
+                      "type": "integer",
+                      "format": "int64",
+                      "description": "Order number."
+                    },
+                    "data[].pk_orderNo": {
+                      "type": "string",
+                      "description": "Order key (for cancel/modify)."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "accountId": {
+                    "type": "string",
+                    "description": "Custody code."
+                  },
+                  "subAccountId": {
+                    "type": "string",
+                    "description": "Derivative sub-account number."
+                  },
+                  "side": {
+                    "type": "string",
+                    "description": "B = buy, S = sell."
+                  },
+                  "symbol": {
+                    "type": "string",
+                    "description": "Derivative code, e.g. VN30F2110."
+                  },
+                  "price": {
+                    "type": "number",
+                    "format": "double",
+                    "description": "Order price."
+                  },
+                  "volume": {
+                    "type": "number",
+                    "format": "double",
+                    "description": "Quantity, greater than 0."
+                  },
+                  "orderType": {
+                    "type": "string",
+                    "description": "SOL = market price >= soPrice, SOU = market price <= soPrice, TSO = Trailing Stop."
+                  },
+                  "soPrice": {
+                    "type": "number",
+                    "format": "double",
+                    "description": "Activation price."
+                  },
+                  "callbackPoint": {
+                    "type": "number",
+                    "format": "double",
+                    "description": "Trailing step (only for orderType = TSO)."
+                  },
+                  "activationPrice": {
+                    "type": "number",
+                    "format": "double",
+                    "description": "Activation price (only for orderType = TSO)."
+                  },
+                  "refId": {
+                    "type": "string",
+                    "description": "Unique order ID."
+                  }
+                },
+                "required": [
+                  "accountId",
+                  "subAccountId",
+                  "side",
+                  "symbol",
+                  "price",
+                  "volume",
+                  "orderType",
+                  "soPrice",
+                  "callbackPoint",
+                  "activationPrice"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/khronos/v1/order/place": {
+      "post": {
+        "summary": "Place order (derivative)",
+        "description": "Place a normal derivative order.",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "cmd": {
+                      "type": "string",
+                      "description": "Command name (echo)."
+                    },
+                    "rc": {
+                      "type": "string",
+                      "description": "Result code, 1 = success."
+                    },
+                    "rs": {
+                      "type": "string",
+                      "description": "Error message (if any)."
+                    },
+                    "oID": {
+                      "type": "string",
+                      "description": "Order session ID."
+                    },
+                    "data[].orderNo": {
+                      "type": "string",
+                      "description": "Order number."
+                    },
+                    "data[].pk_orderNo": {
+                      "type": "string",
+                      "description": "Order key."
+                    },
+                    "data[].showPrice": {
+                      "type": "string",
+                      "description": "Display price."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "accountId": {
+                    "type": "string",
+                    "description": "Custody code."
+                  },
+                  "subAccountId": {
+                    "type": "string",
+                    "description": "Derivative sub-account number."
+                  },
+                  "side": {
+                    "type": "string",
+                    "description": "B = buy, S = sell."
+                  },
+                  "symbol": {
+                    "type": "string",
+                    "description": "Derivative code, e.g. VN30F2103."
+                  },
+                  "price": {
+                    "type": "number",
+                    "format": "double",
+                    "description": "Order price (within floor-ceiling range)."
+                  },
+                  "volume": {
+                    "type": "integer",
+                    "format": "int64",
+                    "description": "Quantity."
+                  },
+                  "orderType": {
+                    "type": "string",
+                    "description": "0 = regular; SLP=1.0,0.8 = SL/TP; ABI=contract = arbitrage."
+                  },
+                  "refId": {
+                    "type": "string",
+                    "description": "Unique random id identifying the order channel (H.<sequence>). You can use a UUID for this case."
+                  }
+                },
+                "required": [
+                  "accountId",
+                  "subAccountId",
+                  "side",
+                  "symbol",
+                  "price",
+                  "volume",
+                  "orderType",
+                  "refId"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/khronos/v1/account/portfolio/position/close": {
+      "get": {
+        "summary": "Closed positions (derivative)",
+        "description": "Query closed derivative positions.",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "query",
+            "required": true,
+            "description": "Custody account number.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "subAccountId",
+            "in": "query",
+            "required": true,
+            "description": "Derivative sub-account.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "symbol",
+            "in": "query",
+            "required": false,
+            "description": "Stock symbol (empty = all).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageNo",
+            "in": "query",
+            "required": true,
+            "description": "Page number.",
+            "schema": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": true,
+            "description": "Page size.",
+            "schema": {
+              "type": "number",
+              "format": "double"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "cmd": {
+                      "type": "string",
+                      "description": "Response command name."
+                    },
+                    "rc": {
+                      "type": "string",
+                      "description": "Result code, 1 = success."
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      },
+                      "description": "List of closed positions."
+                    },
+                    "data[].symbol": {
+                      "type": "string",
+                      "description": "Contract code."
+                    },
+                    "data[].side": {
+                      "type": "string",
+                      "description": "Transaction type (B/S)."
+                    },
+                    "data[].openPrice": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Average opening price."
+                    },
+                    "data[].closePrice": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Average closing price."
+                    },
+                    "data[].closePosition": {
+                      "type": "string",
+                      "description": "Closed positions / total."
+                    },
+                    "data[].fee": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Transaction fee."
+                    },
+                    "data[].tax": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Tax."
+                    },
+                    "data[].closeVM": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Closed P&L."
+                    },
+                    "data[].unrealize": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Unrealized P&L."
+                    },
+                    "data[].closePC": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Closed P&L %."
+                    },
+                    "data[].time": {
+                      "type": "string",
+                      "description": "Last closing time."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/khronos/v1/account/portfolio/status": {
+      "get": {
+        "summary": "Open positions (derivative)",
+        "description": "Query open derivative positions.",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "query",
+            "required": true,
+            "description": "Custody account number.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "subAccountId",
+            "in": "query",
+            "required": true,
+            "description": "Derivative sub-account.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "cmd": {
+                      "type": "string",
+                      "description": "Response command name."
+                    },
+                    "rc": {
+                      "type": "string",
+                      "description": "Result code, 1 = success."
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      },
+                      "description": "List of open positions."
+                    },
+                    "data[].symbol": {
+                      "type": "string",
+                      "description": "Contract code."
+                    },
+                    "data[].im": {
+                      "type": "string",
+                      "description": "Margin ratio."
+                    },
+                    "data[].deliver": {
+                      "type": "integer",
+                      "format": "int64",
+                      "description": "Number of SHORT."
+                    },
+                    "data[].receive": {
+                      "type": "integer",
+                      "format": "int64",
+                      "description": "Number of LONG."
+                    },
+                    "data[].net": {
+                      "type": "integer",
+                      "format": "int64",
+                      "description": "Open position (>0 = LONG, <0 = SHORT)."
+                    },
+                    "data[].side": {
+                      "type": "string",
+                      "description": "L = Long, S = Short."
+                    },
+                    "data[].lastPrice": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Market price."
+                    },
+                    "data[].imValue": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Initial margin value."
+                    },
+                    "data[].vmValue": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Profit/loss."
+                    },
+                    "data[].mrValue": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Required margin value."
+                    },
+                    "data[].duedate": {
+                      "type": "string",
+                      "description": "Due date."
+                    },
+                    "data[].pc_remain": {
+                      "type": "string",
+                      "description": "Open position P&L %."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/khronos/v2/order/condition/change": {
+      "post": {
+        "summary": "Edit condition order (derivative)",
+        "description": "Edit a conditional derivative order.",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "rc": {
+                      "type": "string",
+                      "description": "Result code, 1 = success."
+                    },
+                    "data[].showPrice": {
+                      "type": "string",
+                      "description": "Activation price."
+                    },
+                    "data[].price": {
+                      "type": "string",
+                      "description": "Order price."
+                    },
+                    "data[].volume": {
+                      "type": "string",
+                      "description": "Volume."
+                    },
+                    "data[].pkOrderNo": {
+                      "type": "string",
+                      "description": "Order number."
+                    },
+                    "data[].notes": {
+                      "type": "string",
+                      "description": "Conditional order type."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "accountId": {
+                    "type": "string",
+                    "description": "Custody code."
+                  },
+                  "pkOrderNo": {
+                    "type": "string",
+                    "description": "pk_orderNo from the order book query API."
+                  },
+                  "refId": {
+                    "type": "string",
+                    "description": "Unique reference ID."
+                  },
+                  "soPrice": {
+                    "type": "number",
+                    "format": "double",
+                    "description": "New activation price."
+                  },
+                  "type": {
+                    "type": "string",
+                    "description": "Type (empty)."
+                  },
+                  "cmd": {
+                    "type": "string",
+                    "description": "Web.Order.ChangeCondition."
+                  }
+                },
+                "required": [
+                  "accountId",
+                  "pkOrderNo",
+                  "refId",
+                  "soPrice"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/khronos/v1/order/change": {
+      "post": {
+        "summary": "Edit normal order (derivative)",
+        "description": "Edit a normal derivative order.",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "rc": {
+                      "type": "string",
+                      "description": "Result code, 1 = success."
+                    },
+                    "data[].orderNo": {
+                      "type": "string",
+                      "description": "Order number."
+                    },
+                    "data[].status": {
+                      "type": "string",
+                      "description": "Status (PC = pending change)."
+                    },
+                    "data[].showPrice": {
+                      "type": "string",
+                      "description": "New price."
+                    },
+                    "data[].volume": {
+                      "type": "string",
+                      "description": "New volume."
+                    },
+                    "data[].pk_orderNo": {
+                      "type": "string",
+                      "description": "Order key."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "accountId": {
+                    "type": "string",
+                    "description": "Custody code."
+                  },
+                  "subAccountId": {
+                    "type": "string",
+                    "description": "Derivative sub-account number."
+                  },
+                  "orderNo": {
+                    "type": "string",
+                    "description": "orderNo from the place order API."
+                  },
+                  "refId": {
+                    "type": "string",
+                    "description": "Unique reference ID."
+                  },
+                  "nvol": {
+                    "type": "number",
+                    "format": "double",
+                    "description": "New volume (> 0)."
+                  },
+                  "nprice": {
+                    "type": "number",
+                    "format": "double",
+                    "description": "New price."
+                  }
+                },
+                "required": [
+                  "accountId",
+                  "subAccountId",
+                  "orderNo",
+                  "refId",
+                  "nvol",
+                  "nprice"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/derivatives/contracts": {
+      "get": {
+        "summary": "Price board (WSS, derivative) (contracts)",
+        "description": "Real-time derivative price board over WebSocket.",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        }
+      }
+    },
+    "/khronos/v1/cash/deposit/update": {
+      "post": {
+        "summary": "Deposit margin",
+        "description": "Deposit margin into a derivative account.",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "cmd": {
+                      "type": "string",
+                      "description": "Business type."
+                    },
+                    "rc": {
+                      "type": "string",
+                      "description": "Result code. 1: success, < 0: error."
+                    },
+                    "rs": {
+                      "type": "string",
+                      "description": "Error detail."
+                    },
+                    "oID": {
+                      "type": "string",
+                      "description": "Transaction ID."
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      },
+                      "description": "Response data (contains transactionId)."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "accountId": {
+                    "type": "string",
+                    "description": "Custody account number."
+                  },
+                  "subAccountId": {
+                    "type": "string",
+                    "description": "Derivative account number."
+                  },
+                  "amount": {
+                    "type": "number",
+                    "format": "double",
+                    "description": "Deposit margin amount."
+                  },
+                  "paymentContent": {
+                    "type": "string",
+                    "description": "Deposit transaction description."
+                  }
+                },
+                "required": [
+                  "accountId",
+                  "subAccountId",
+                  "amount"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/physis/v1/stock/transfer": {
+      "post": {
+        "summary": "Internal transfer",
+        "description": "Transfer money between sub-accounts.",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Response code. 200 = success, other = error."
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Response message."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sourceAccountNumber": {
+                    "type": "string",
+                    "description": "Source account number."
+                  },
+                  "destinationAccountNumber": {
+                    "type": "string",
+                    "description": "Destination account number."
+                  },
+                  "amount": {
+                    "type": "number",
+                    "format": "double",
+                    "description": "Transfer amount."
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Transfer description."
+                  }
+                },
+                "required": [
+                  "sourceAccountNumber",
+                  "destinationAccountNumber",
+                  "amount",
+                  "description"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/khronos/v1/cash/withdraw/update": {
+      "post": {
+        "summary": "Withdraw margin",
+        "description": "Withdraw margin from a derivative account.",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "cmd": {
+                      "type": "string",
+                      "description": "Business type."
+                    },
+                    "rc": {
+                      "type": "string",
+                      "description": "Result code. 1: success, < 0: error."
+                    },
+                    "rs": {
+                      "type": "string",
+                      "description": "Error detail."
+                    },
+                    "oID": {
+                      "type": "string",
+                      "description": "Transaction ID."
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      },
+                      "description": "Response data."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "accountId": {
+                    "type": "string",
+                    "description": "Custody account number."
+                  },
+                  "subAccountId": {
+                    "type": "string",
+                    "description": "Derivative account number."
+                  },
+                  "amount": {
+                    "type": "number",
+                    "format": "double",
+                    "description": "Withdraw margin amount."
+                  },
+                  "paymentContent": {
+                    "type": "string",
+                    "description": "Withdraw transaction description."
+                  }
+                },
+                "required": [
+                  "accountId",
+                  "subAccountId",
+                  "amount"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/campaign-management/v1/margin/subscription/{accountNo}/addons/detail": {
+      "get": {
+        "summary": "Supplementary loan package",
+        "description": "Get addon/supplementary loan package details for a margin account.",
+        "parameters": [
+          {
+            "name": "accountNo",
+            "in": "path",
+            "required": true,
+            "description": "Margin account number.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "marginSureViews[].id": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Marginsure package ID."
+                    },
+                    "marginSureViews[].name": {
+                      "type": "string",
+                      "description": "Marginsure package name."
+                    },
+                    "marginSureViews[].code": {
+                      "type": "string",
+                      "description": "Marginsure package code."
+                    },
+                    "marginSureViews[].subscriptionFee": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Subscription fee."
+                    },
+                    "marginSureViews[].status": {
+                      "type": "string",
+                      "description": "Package subscription status."
+                    },
+                    "tplus.data[].id": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "T+ package ID."
+                    },
+                    "tplus.data[].name": {
+                      "type": "string",
+                      "description": "T+ package name."
+                    },
+                    "tplus.data[].firstRate": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "First-tier interest rate of T+ package."
+                    },
+                    "tplus.data[].status": {
+                      "type": "string",
+                      "description": "T+ package status."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/aion/v1/accounts/{accountNo}/se": {
+      "get": {
+        "summary": "Stock asset",
+        "description": "Get stock asset by sub-account.",
+        "parameters": [
+          {
+            "name": "accountNo",
+            "in": "path",
+            "required": true,
+            "description": "Account number.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "assets": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      },
+                      "description": "List of stock assets."
+                    },
+                    "assets[].symbol": {
+                      "type": "string",
+                      "description": "Stock symbol."
+                    },
+                    "assets[].quantity": {
+                      "type": "integer",
+                      "format": "int64",
+                      "description": "Holding quantity."
+                    },
+                    "assets[].avgPrice": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Average price."
+                    },
+                    "assets[].marketValue": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Market value."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/akhlys/v1/accounts/{accountNo}/cancel-orders": {
+      "put": {
+        "summary": "Cancel order",
+        "description": "Cancel normal stock orders.",
+        "parameters": [
+          {
+            "name": "accountNo",
+            "in": "path",
+            "required": true,
+            "description": "Account number.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code, 0 = success."
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Result message."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ordersList": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    },
+                    "description": "List of orders to cancel."
+                  }
+                },
+                "required": [
+                  "ordersList"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/aion/v1/accounts/{accountNo}/cashInvestments": {
+      "get": {
+        "summary": "Cash balance",
+        "description": "Get cash balance information for a sub-account.",
+        "parameters": [
+          {
+            "name": "accountNo",
+            "in": "path",
+            "required": true,
+            "description": "Account number.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "totalCount": {
+                      "type": "integer",
+                      "format": "int64",
+                      "description": "Total number of records."
+                    },
+                    "pageSize": {
+                      "type": "integer",
+                      "format": "int64",
+                      "description": "Page size (default = 20)."
+                    },
+                    "pageIndex": {
+                      "type": "integer",
+                      "format": "int64",
+                      "description": "Page index (default = 1)."
+                    },
+                    "data[].bodBalance": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Cash at TCBS."
+                    },
+                    "data[].cashBalance": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Cash balance."
+                    },
+                    "data[].pp0forBF": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Basic purchasing power for BOND/FUND products."
+                    },
+                    "data[].bankAvlBalanceBF": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Total IA available balance for BOND/FUND."
+                    },
+                    "data[].accountNo": {
+                      "type": "string",
+                      "description": "Account number."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/erebos/v2/digital/trans-hist-cashStatements": {
+      "get": {
+        "summary": "Cash statement",
+        "description": "Get cash statement (transaction history) for a sub-account.",
+        "parameters": [
+          {
+            "name": "accountNo",
+            "in": "query",
+            "required": true,
+            "description": "Account number.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fromDate",
+            "in": "query",
+            "required": true,
+            "description": "From date (YYYY-MM-DD).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "toDate",
+            "in": "query",
+            "required": true,
+            "description": "To date (YYYY-MM-DD).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": true,
+            "description": "Page size.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageIndex",
+            "in": "query",
+            "required": true,
+            "description": "Page number.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "transactionCode",
+            "in": "query",
+            "required": true,
+            "description": "Transaction code.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "response.pageIndex": {
+                      "type": "integer",
+                      "format": "int64",
+                      "description": "Page index."
+                    },
+                    "response.pageSize": {
+                      "type": "integer",
+                      "format": "int64",
+                      "description": "Page size."
+                    },
+                    "response.totalCreditAmount": {
+                      "type": "integer",
+                      "format": "int64",
+                      "description": "Total credit amount."
+                    },
+                    "response.totalDebitAmount": {
+                      "type": "integer",
+                      "format": "int64",
+                      "description": "Total debit amount."
+                    },
+                    "response.totalCount": {
+                      "type": "integer",
+                      "format": "int64",
+                      "description": "Total records."
+                    },
+                    "response.data[].custodyID": {
+                      "type": "string",
+                      "description": "Custody ID."
+                    },
+                    "response.data[].transactionCode": {
+                      "type": "string",
+                      "description": "Transaction code."
+                    },
+                    "response.data[].transactionName": {
+                      "type": "string",
+                      "description": "Transaction name."
+                    },
+                    "response.data[].debitAmount": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Debit amount."
+                    },
+                    "response.data[].creditAmount": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Credit amount."
+                    },
+                    "response.data[].businessDate": {
+                      "type": "string",
+                      "description": "Business date."
+                    },
+                    "response.data[].transactionDate": {
+                      "type": "string",
+                      "description": "Transaction date."
+                    },
+                    "response.data[].descriptions": {
+                      "type": "string",
+                      "description": "Description."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/erebos/v2/digital/margin-info": {
+      "get": {
+        "summary": "Debt lookup",
+        "description": "Get margin debt information (loan history) for a sub-account.",
+        "parameters": [
+          {
+            "name": "acctno",
+            "in": "query",
+            "required": true,
+            "description": "Account number.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fromdate",
+            "in": "query",
+            "required": true,
+            "description": "From date (YYYY-MM-DD).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "toDate",
+            "in": "query",
+            "required": true,
+            "description": "To date (YYYY-MM-DD).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": true,
+            "description": "Page number.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": true,
+            "description": "Page size.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "custodycd",
+            "in": "query",
+            "required": true,
+            "description": "Custody code.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "response.totalRow": {
+                      "type": "integer",
+                      "format": "int64",
+                      "description": "Total rows."
+                    },
+                    "response.totalPage": {
+                      "type": "integer",
+                      "format": "int64",
+                      "description": "Total pages."
+                    },
+                    "response.data[].releaseDate": {
+                      "type": "string",
+                      "description": "Release date."
+                    },
+                    "response.data[].overDueDate": {
+                      "type": "string",
+                      "description": "Due date."
+                    },
+                    "response.data[].releasedAmount": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Released amount."
+                    },
+                    "response.data[].printAmount": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Current principal."
+                    },
+                    "response.data[].intAmount": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Current interest and fee."
+                    },
+                    "response.data[].remainingInterestFee": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Remaining interest fee."
+                    },
+                    "response.data[].paidInterestFee": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Paid interest fee."
+                    },
+                    "response.data[].rate2": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Interest rate."
+                    },
+                    "response.data[].releasedDay": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Loan days."
+                    },
+                    "response.data[].paidFee": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Paid fee."
+                    },
+                    "response.data[].remainingFee": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Remaining fee."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tartarus/v1/tickerSnaps": {
+      "get": {
+        "summary": "Foreign room",
+        "description": "Get foreign investor room and market snapshot information.",
+        "parameters": [
+          {
+            "name": "index",
+            "in": "query",
+            "required": false,
+            "description": "Stock basket: 1 = HOSE, 2 = VN30, 3 = HNX, 4 = HNX30, 5 = Upcom, 10 = Midcap, 11 = VN100, 12 = VNAllshare, 13 = VNSmallcap, 14 = VNXAllshare, 15 = VN50, 16 = VNSI.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "tradingDate": {
+                      "type": "string",
+                      "description": "Trading date."
+                    },
+                    "data[].symbol": {
+                      "type": "string",
+                      "description": "Stock symbol."
+                    },
+                    "data[].refPrice": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Reference price."
+                    },
+                    "data[].ceilPrice": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Ceiling price."
+                    },
+                    "data[].floorPrice": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Floor price."
+                    },
+                    "data[].matchPrice": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Matched price."
+                    },
+                    "data[].matchQtty": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Matched volume."
+                    },
+                    "data[].change": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Price change."
+                    },
+                    "data[].changePercent": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Change percent."
+                    },
+                    "data[].totalVolume": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Total volume."
+                    },
+                    "data[].totalValue": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Total value."
+                    },
+                    "data[].buyForeignQtty": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Foreign buy volume."
+                    },
+                    "data[].sellForeignQtty": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Foreign sell volume."
+                    },
+                    "data[].room": {
+                      "type": "string",
+                      "description": "Foreign room."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/aion/v1/accounts/{accountNo}/orders/{orderID}": {
+      "get": {
+        "summary": "Get order by ID",
+        "description": "Get a single order by Order ID for a sub-account.",
+        "parameters": [
+          {
+            "name": "accountNo",
+            "in": "path",
+            "required": true,
+            "description": "Account number.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "orderID",
+            "in": "path",
+            "required": true,
+            "description": "Order ID.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "object": {
+                      "type": "string",
+                      "description": "Default = 'List'."
+                    },
+                    "pageSize": {
+                      "type": "integer",
+                      "format": "int64",
+                      "description": "Page size."
+                    },
+                    "pageIndex": {
+                      "type": "integer",
+                      "format": "int64",
+                      "description": "Page index."
+                    },
+                    "totalCount": {
+                      "type": "integer",
+                      "format": "int64",
+                      "description": "Total number of records."
+                    },
+                    "data[].orderID": {
+                      "type": "string",
+                      "description": "Order ID."
+                    },
+                    "data[].accountNo": {
+                      "type": "string",
+                      "description": "Account number."
+                    },
+                    "data[].symbol": {
+                      "type": "string",
+                      "description": "Stock symbol."
+                    },
+                    "data[].execType": {
+                      "type": "string",
+                      "description": "Order type (NB/NS)."
+                    },
+                    "data[].orderQtty": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Order quantity."
+                    },
+                    "data[].execQtty": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Matched quantity."
+                    },
+                    "data[].priceType": {
+                      "type": "string",
+                      "description": "Price type."
+                    },
+                    "data[].limitPrice": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Order price."
+                    },
+                    "data[].matchPrice": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Average match price."
+                    },
+                    "data[].orStatus": {
+                      "type": "string",
+                      "description": "Order status: 0 = Rejected, 2 = Sent, 3 = Canceled, 4 = Matched, 5 = Expired, 8 = Waiting, 10 = Modified, 11 = Sending, 12 = Matched all, A = Modifying, C = Canceling, S = Completed."
+                    },
+                    "data[].txdate": {
+                      "type": "string",
+                      "description": "Order date (RFC 3339)."
+                    },
+                    "data[].txtime": {
+                      "type": "string",
+                      "description": "Order time."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/aion/v1/accounts/{accountNo}/orders": {
+      "get": {
+        "summary": "Get orders",
+        "description": "Get the order book for a sub-account.",
+        "parameters": [
+          {
+            "name": "accountNo",
+            "in": "path",
+            "required": true,
+            "description": "Sub-account number, e.g. 0001170730.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "orders": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      },
+                      "description": "List of orders in the order book."
+                    },
+                    "orders[].orderId": {
+                      "type": "string",
+                      "description": "Order ID."
+                    },
+                    "orders[].symbol": {
+                      "type": "string",
+                      "description": "Stock symbol."
+                    },
+                    "orders[].execType": {
+                      "type": "string",
+                      "description": "Trading direction (NB/NS)."
+                    },
+                    "orders[].price": {
+                      "type": "integer",
+                      "format": "int64",
+                      "description": "Order price."
+                    },
+                    "orders[].quantity": {
+                      "type": "integer",
+                      "format": "int64",
+                      "description": "Order quantity."
+                    },
+                    "orders[].status": {
+                      "type": "string",
+                      "description": "Order status."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/khaos/v1/loan/{accountNo}": {
+      "get": {
+        "summary": "Loan list",
+        "description": "Get list of loans for a margin account.",
+        "parameters": [
+          {
+            "name": "accountNo",
+            "in": "path",
+            "required": true,
+            "description": "Margin account number.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "size": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Number of records."
+                    },
+                    "content[].openingDate": {
+                      "type": "string",
+                      "description": "Loan opening date."
+                    },
+                    "content[].dueDate": {
+                      "type": "string",
+                      "description": "Due date."
+                    },
+                    "content[].renewTime": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Number of renewals."
+                    },
+                    "content[].maxRenewTime": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Maximum renewals allowed."
+                    },
+                    "content[].isRenewable": {
+                      "type": "boolean",
+                      "description": "Renewable: true/false."
+                    },
+                    "content[].reasonList": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      },
+                      "description": "Reasons for non-renewal."
+                    },
+                    "content[].insurance.insuranceName": {
+                      "type": "string",
+                      "description": "Marginsure package name."
+                    },
+                    "content[].insurance.insuranceCode": {
+                      "type": "string",
+                      "description": "Marginsure package code."
+                    },
+                    "content[].insurance.insuranceFee": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Marginsure fee."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/aion/v1/customers/{custodyId}/accounts": {
+      "get": {
+        "summary": "Margin quota",
+        "description": "Get margin quota information for a customer.",
+        "parameters": [
+          {
+            "name": "custodyId",
+            "in": "path",
+            "required": true,
+            "description": "Custody code.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "[].custodyID": {
+                      "type": "string",
+                      "description": "Custody ID."
+                    },
+                    "[].accountNo": {
+                      "type": "string",
+                      "description": "Account number."
+                    },
+                    "[].aftype": {
+                      "type": "string",
+                      "description": "Contract type."
+                    },
+                    "[].vsdStatus": {
+                      "type": "string",
+                      "description": "VSD status."
+                    },
+                    "[].accountStatus": {
+                      "type": "string",
+                      "description": "Status: A = Active, P = Pending, C = Closed, B = Blocked, N = Pending close, R = Rejected, T = Pending update."
+                    },
+                    "[].marginLimit": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Margin limit of the sub-account."
+                    },
+                    "[].accountType": {
+                      "type": "string",
+                      "description": "Account type: normal, margin, copier, trader, CHILD, CW, SPW, SPT."
+                    },
+                    "[].isIA": {
+                      "type": "string",
+                      "description": "IA connection: Y = Yes, N = No."
+                    },
+                    "[].bankName": {
+                      "type": "string",
+                      "description": "IA-connected bank name."
+                    },
+                    "[].bankAccount": {
+                      "type": "string",
+                      "description": "IA-connected bank account."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tartarus/v1/tickerCommons": {
+      "get": {
+        "summary": "Symbol & price",
+        "description": "Get symbol and price information (cash market).",
+        "parameters": [
+          {
+            "name": "tickers",
+            "in": "query",
+            "required": false,
+            "description": "Comma-separated list of stock symbols. Do not combine with the index param.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "index",
+            "in": "query",
+            "required": false,
+            "description": "Stock basket: 1 = HOSE, 2 = VN30, 3 = HNX, 4 = HNX30, 5 = UPCOM, 10 = Midcap, 11 = VN100, 12 = VNAllShare, 13 = VNSmallCap, 14 = VNXAllShare, 15 = VN50, 16 = VNSI. Do not combine with the tickers param.",
+            "schema": {
+              "type": "number",
+              "format": "double"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      },
+                      "description": "List of ticker information."
+                    },
+                    "data[].symbol": {
+                      "type": "string",
+                      "description": "Stock symbol."
+                    },
+                    "data[].ceilPrice": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Ceiling price."
+                    },
+                    "data[].floorPrice": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Floor price."
+                    },
+                    "data[].refPrice": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Reference price."
+                    },
+                    "data[].bidPrice01": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Bid price 1."
+                    },
+                    "data[].bidPrice02": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Bid price 2."
+                    },
+                    "data[].bidPrice03": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Bid price 3."
+                    },
+                    "data[].bidQtty01": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Bid volume 1."
+                    },
+                    "data[].bidQtty02": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Bid volume 2."
+                    },
+                    "data[].bidQtty03": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Bid volume 3."
+                    },
+                    "data[].offerPrice01": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Offer price 1."
+                    },
+                    "data[].offerPrice02": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Offer price 2."
+                    },
+                    "data[].offerPrice03": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Offer price 3."
+                    },
+                    "data[].offerQtty01": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Offer volume 1."
+                    },
+                    "data[].offerQtty02": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Offer volume 2."
+                    },
+                    "data[].offerQtty03": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Offer volume 3."
+                    },
+                    "data[].matchPrice": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Matched price."
+                    },
+                    "data[].matchQtty": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Matched volume."
+                    },
+                    "data[].change": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Price change."
+                    },
+                    "data[].changePercent": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Change percent."
+                    },
+                    "data[].open": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Open price."
+                    },
+                    "data[].high": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "High price."
+                    },
+                    "data[].low": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Low price."
+                    },
+                    "data[].avg": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Average price."
+                    },
+                    "data[].totalVol": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Total trading volume."
+                    },
+                    "data[].totalVal": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Total trading value."
+                    },
+                    "data[].buyForeignQtty": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Foreign buy volume."
+                    },
+                    "data[].sellForeignQtty": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Foreign sell volume."
+                    },
+                    "data[].room": {
+                      "type": "string",
+                      "description": "Foreign room."
+                    },
+                    "data[].indexNumber": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Stock basket index."
+                    },
+                    "tradingDate": {
+                      "type": "string",
+                      "description": "Trading date (dd/MM/yyyy)."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/aion/v1/accounts/{accountNo}/matching-details": {
+      "get": {
+        "summary": "Matching details",
+        "description": "Get order matching information for a sub-account.",
+        "parameters": [
+          {
+            "name": "accountNo",
+            "in": "path",
+            "required": true,
+            "description": "Account number.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "totalCount": {
+                      "type": "integer",
+                      "format": "int64",
+                      "description": "Total number of records returned."
+                    },
+                    "pageSize": {
+                      "type": "integer",
+                      "format": "int64",
+                      "description": "Number of elements per page."
+                    },
+                    "pageIndex": {
+                      "type": "integer",
+                      "format": "int64",
+                      "description": "Page index."
+                    },
+                    "data[].orderId": {
+                      "type": "string",
+                      "description": "Order ID."
+                    },
+                    "data[].side": {
+                      "type": "string",
+                      "description": "Direction: S = Sell, B = Buy."
+                    },
+                    "data[].symbol": {
+                      "type": "string",
+                      "description": "Stock symbol."
+                    },
+                    "data[].quoteQtty": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Order volume."
+                    },
+                    "data[].quotePrice": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Bid price."
+                    },
+                    "data[].tradeId": {
+                      "type": "string",
+                      "description": "Match trade ID."
+                    },
+                    "data[].qtty": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Matched volume."
+                    },
+                    "data[].price": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Matching price."
+                    },
+                    "data[].timeExec": {
+                      "type": "string",
+                      "description": "Matching time."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/akhlys/v1/accounts/{accountNo}/orders": {
+      "post": {
+        "summary": "Place order",
+        "description": "Place a normal stock order.",
+        "parameters": [
+          {
+            "name": "accountNo",
+            "in": "path",
+            "required": true,
+            "description": "Account number, e.g. 0001170730.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code, 0 = success."
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Result message."
+                    },
+                    "orderId": {
+                      "type": "string",
+                      "description": "Created order ID."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "execType": {
+                    "type": "string",
+                    "description": "Trading direction: NS = sell, NB = buy."
+                  },
+                  "symbol": {
+                    "type": "string",
+                    "description": "Stock symbol, e.g. VNM."
+                  },
+                  "priceType": {
+                    "type": "string",
+                    "description": "Price type: LO, ATO, ATC, PLO, MP, MTL, MOK, MAK."
+                  },
+                  "price": {
+                    "type": "integer",
+                    "format": "int64",
+                    "description": "Trading price."
+                  },
+                  "quantity": {
+                    "type": "integer",
+                    "format": "int64",
+                    "description": "Trading quantity."
+                  }
+                },
+                "required": [
+                  "execType",
+                  "symbol",
+                  "priceType",
+                  "price",
+                  "quantity"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/nyx/v1/intraday/{ticker}/his/paging": {
+      "get": {
+        "summary": "Price matching history",
+        "description": "Get intraday price matching history for a stock symbol.",
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "path",
+            "required": true,
+            "description": "Stock symbol, e.g. TCB.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "Page number (starts from 0).",
+            "schema": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "description": "Page size (max 100).",
+            "schema": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          {
+            "name": "headIndex",
+            "in": "query",
+            "required": false,
+            "description": "Head index for reverse paging (default -1).",
+            "schema": {
+              "type": "number",
+              "format": "double"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "page": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Current page."
+                    },
+                    "size": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Page size."
+                    },
+                    "headIndex": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Head index."
+                    },
+                    "numberOfItems": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Number of items returned."
+                    },
+                    "total": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Total matched orders."
+                    },
+                    "ticker": {
+                      "type": "string",
+                      "description": "Stock symbol."
+                    },
+                    "data[].p": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Matching price."
+                    },
+                    "data[].v": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Volume."
+                    },
+                    "data[].cp": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Price change (price - ref price)."
+                    },
+                    "data[].a": {
+                      "type": "string",
+                      "description": "Action (Buy up/Sell down)."
+                    },
+                    "data[].ba": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Buy accumulate."
+                    },
+                    "data[].sa": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Sell accumulate."
+                    },
+                    "data[].hl": {
+                      "type": "boolean",
+                      "description": "Highlight if value > 200M."
+                    },
+                    "data[].t": {
+                      "type": "string",
+                      "description": "Time received from exchange."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/hydros/v1/account/{accountNo}/pricing-policy": {
+      "get": {
+        "summary": "Margin pricing policy",
+        "description": "Get available margin pricing policies for an account.",
+        "parameters": [
+          {
+            "name": "accountNo",
+            "in": "path",
+            "required": true,
+            "description": "Margin account number.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "productId",
+            "in": "query",
+            "required": false,
+            "description": "Product ID. If omitted, system resolves from account.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        }
+      }
+    },
+    "/aion/v1/accounts/{accountNo}/ppse/{symbol}/{price}": {
+      "get": {
+        "summary": "Purchasing power by symbol & price",
+        "description": "Get purchasing power for a specific stock symbol and price.",
+        "parameters": [
+          {
+            "name": "accountNo",
+            "in": "path",
+            "required": true,
+            "description": "Account number.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "symbol",
+            "in": "path",
+            "required": true,
+            "description": "Stock symbol, e.g. FPT.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "price",
+            "in": "path",
+            "required": true,
+            "description": "Price for purchasing power calculation.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "pp0": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Basic purchasing power."
+                    },
+                    "maxQtty": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Maximum quantity available at this price."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/aion/v1/accounts/{accountNo}/ppse/{symbol}": {
+      "get": {
+        "summary": "Purchasing power by symbol",
+        "description": "Get purchasing power for a specific stock symbol.",
+        "parameters": [
+          {
+            "name": "accountNo",
+            "in": "path",
+            "required": true,
+            "description": "Account number.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "symbol",
+            "in": "path",
+            "required": true,
+            "description": "Stock symbol, e.g. FPT.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "pp0": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Basic purchasing power."
+                    },
+                    "maxQtty": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Maximum quantity available to buy."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/aion/v1/accounts/{accountNo}/ppse": {
+      "get": {
+        "summary": "Purchasing power",
+        "description": "Get purchasing power for a sub-account.",
+        "parameters": [
+          {
+            "name": "accountNo",
+            "in": "path",
+            "required": true,
+            "description": "Account number.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "symbol",
+            "in": "path",
+            "required": true,
+            "description": "Stock symbol (symbol variant).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "price",
+            "in": "path",
+            "required": true,
+            "description": "Price for purchasing power (price variant).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "purchasingPower": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Available purchasing power."
+                    },
+                    "maxQuantity": {
+                      "type": "integer",
+                      "format": "int64",
+                      "description": "Maximum buyable quantity."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tartarus/v1/putThroughSnaps": {
+      "get": {
+        "summary": "Put-through information",
+        "description": "Get put-through (deal/negotiated) trading information.",
+        "parameters": [
+          {
+            "name": "floor",
+            "in": "query",
+            "required": false,
+            "description": "Stock basket: 1 = HOSE, 2 = HNX, 3 = Upcom.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "buyAdv[].symbol": {
+                      "type": "string",
+                      "description": "Stock symbol."
+                    },
+                    "buyAdv[].price": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Price."
+                    },
+                    "buyAdv[].vol": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Volume."
+                    },
+                    "buyAdv[].time": {
+                      "type": "string",
+                      "description": "Time."
+                    },
+                    "buyAdv[].side": {
+                      "type": "string",
+                      "description": "Side (B = Buy)."
+                    },
+                    "sellAdv[].symbol": {
+                      "type": "string",
+                      "description": "Stock symbol."
+                    },
+                    "sellAdv[].price": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Price."
+                    },
+                    "sellAdv[].vol": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Volume."
+                    },
+                    "sellAdv[].side": {
+                      "type": "string",
+                      "description": "Side (S = Sell)."
+                    },
+                    "match[].symbol": {
+                      "type": "string",
+                      "description": "Stock symbol."
+                    },
+                    "match[].price": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Matched price."
+                    },
+                    "match[].vol": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Matched volume."
+                    },
+                    "match[].val": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Value."
+                    },
+                    "match[].time": {
+                      "type": "string",
+                      "description": "Match time."
+                    },
+                    "match[].accumulatedValue": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Accumulated value."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/hydros/v1/account/{accountNo}/risk": {
+      "get": {
+        "summary": "Risk & margin ratios",
+        "description": "Get principal debt, interest debt, Rtt, margin ratios for a margin account.",
+        "parameters": [
+          {
+            "name": "accountNo",
+            "in": "path",
+            "required": true,
+            "description": "Margin account number.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "[].accountNo": {
+                      "type": "string",
+                      "description": "Account number."
+                    },
+                    "[].rtt": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Actual Rtt."
+                    },
+                    "[].outstanding": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Total principal debt."
+                    },
+                    "[].accruedInterest": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Accrued interest."
+                    },
+                    "[].dueAmount": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Due amount."
+                    },
+                    "[].overdueAmount": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Overdue amount."
+                    },
+                    "[].totalFeeDebt": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Total fee debt (Marginsure fee)."
+                    },
+                    "[].riskPolicy.initialMargin": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Initial margin ratio."
+                    },
+                    "[].riskPolicy.maintenanceMargin": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Maintenance margin ratio."
+                    },
+                    "[].riskPolicy.liquidationMargin": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Liquidation margin ratio."
+                    },
+                    "[].riskStatus.code": {
+                      "type": "string",
+                      "description": "Risk status code."
+                    },
+                    "[].riskStatus.description": {
+                      "type": "string",
+                      "description": "Risk status description."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ananke/v1/securities": {
+      "get": {
+        "summary": "Securities information",
+        "description": "Get detailed securities information (stock, bond, derivative listing data).",
+        "parameters": [
+          {
+            "name": "fields",
+            "in": "query",
+            "required": false,
+            "description": "Fields to include in response. Default: all.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "required": false,
+            "description": "Filter expression in field=value format, e.g. symbol=TCB.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        }
+      }
+    },
+    "/nyx/v1/intraday/{ticker}/bsa": {
+      "get": {
+        "summary": "Daily supply & demand",
+        "description": "Get daily supply and demand data for a stock symbol.",
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "path",
+            "required": true,
+            "description": "Stock symbol, e.g. TCB.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "description": "Investor type: sheep (small retail), wolf (medium institutional), shark (large institutional), all (default).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ticker": {
+                      "type": "string",
+                      "description": "Stock symbol."
+                    },
+                    "data[].bup": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Buy Up Percent."
+                    },
+                    "data[].sdp": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Sell Down Percent."
+                    },
+                    "data[].bsr": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Buy/Sell Ratio."
+                    },
+                    "data[].t": {
+                      "type": "string",
+                      "description": "Transaction time."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/nyx/v1/intraday/{ticker}/bsa-ext": {
+      "get": {
+        "summary": "Intraday supply & demand (15m)",
+        "description": "Get intraday supply and demand data in 15-minute intervals.",
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "path",
+            "required": true,
+            "description": "Stock symbol, e.g. TCB.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "timeWindow",
+            "in": "query",
+            "required": true,
+            "description": "Time frame in minutes: 15 or 60.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tWindow",
+            "in": "query",
+            "required": true,
+            "description": "Time frame in minutes: 15.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "description": "Investor type: sheep (small retail), wolf (medium institutional), shark (large institutional), all (default).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ticker": {
+                      "type": "string",
+                      "description": "Stock symbol."
+                    },
+                    "data[].bu": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Buy Up volume."
+                    },
+                    "data[].bms": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Buy Up Moving Sum."
+                    },
+                    "data[].bup": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Buy Up Percent."
+                    },
+                    "data[].sd": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Sell Down volume."
+                    },
+                    "data[].sms": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Sell Down Moving Sum."
+                    },
+                    "data[].sdp": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Sell Down Percent."
+                    },
+                    "data[].bsr": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Buy/Sell Ratio."
+                    },
+                    "data[].t": {
+                      "type": "string",
+                      "description": "Time (HH:mm:ss)."
+                    },
+                    "data[].s": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Time (timestamp)."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/nyx/v1/intraday/{ticker}/bsa-month": {
+      "get": {
+        "summary": "Monthly supply & demand",
+        "description": "Get monthly supply and demand data for a stock symbol.",
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "path",
+            "required": true,
+            "description": "Stock symbol, e.g. TCB.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "timeWindow",
+            "in": "query",
+            "required": false,
+            "description": "Time frame: 1M.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "description": "Investor type: sheep (small retail), wolf (medium institutional), shark (large institutional), all (default).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ticker": {
+                      "type": "string",
+                      "description": "Stock symbol."
+                    },
+                    "data[].bup": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Buy Up Percent."
+                    },
+                    "data[].sdp": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Sell Down Percent."
+                    },
+                    "data[].bsr": {
+                      "type": "number",
+                      "format": "double",
+                      "description": "Buy/Sell Ratio."
+                    },
+                    "data[].t": {
+                      "type": "string",
+                      "description": "Time (DD/MM)."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/akhlys/v1/accounts/{accountNo}/orders/{orderId}": {
+      "put": {
+        "summary": "Update order",
+        "description": "Modify a normal stock order.",
+        "parameters": [
+          {
+            "name": "accountNo",
+            "in": "path",
+            "required": true,
+            "description": "Account number.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "description": "The order ID to modify.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code, 0 = success."
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Result message."
+                    },
+                    "orderId": {
+                      "type": "string",
+                      "description": "Modified order ID."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "price": {
+                    "type": "integer",
+                    "format": "int64",
+                    "description": "New trading price."
+                  },
+                  "quantity": {
+                    "type": "integer",
+                    "format": "int64",
+                    "description": "New trading quantity."
+                  }
+                },
+                "required": [
+                  "price",
+                  "quantity"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ]
+}
