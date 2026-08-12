@@ -113,5 +113,21 @@ class TechnicalIndicators:
             return None
         return round(float(z.dropna().iloc[-1]), 2)
 
+    def calculate_abnormal_return(self, close_series: pd.Series, period: int = 10) -> Optional[float]:
+        """
+        Tinh Abnormal Return trong N phien gan nhat (phuong phap chenh lech so voi ky vong MA20).
+        Cong thuc: Sum(Daily_Return - MA20_Daily_Return) trong N phien.
+        """
+        if len(close_series) < 30:
+            return 0.0
+        try:
+            daily_returns = close_series.pct_change()
+            expected_return = daily_returns.rolling(20).mean()
+            abnormal_returns = daily_returns - expected_return
+            abnormal_sum = float(abnormal_returns.iloc[-period:].sum())
+            return round(abnormal_sum * 100, 2) # Tra ve ty le %
+        except Exception:
+            return 0.0
+
 
 indicators = TechnicalIndicators()

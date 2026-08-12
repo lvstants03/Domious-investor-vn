@@ -1,9 +1,12 @@
 import asyncio
 import logging
+from datetime import date, timedelta
 from typing import List, Dict, Any
 from src.tcbs.market import market_client
+from src.data_pipeline.ohlcv_fetcher import OHLCVFetcher
 
 logger = logging.getLogger("dominus-investor.scanner.data_fetcher")
+ohlcv_fetcher = OHLCVFetcher()
 
 class ScannerDataFetcher:
     async def fetch_all_market_data(self, symbols: List[str]) -> Dict[str, Dict[str, Any]]:
@@ -41,10 +44,16 @@ class ScannerDataFetcher:
                     # 3. Lay cung cau 15m trong phien
                     supply_demand = await market_client.get_supply_demand_15m(symbol)
 
+                    # 4. Tai lich su gia ohlcv (90 ngày) dung de tinh Z-Score 50 va Abnormal Return
+                    end_dt = date.today().strftime("%Y-%m-%d")
+                    start_dt = (date.today() - timedelta(days=120)).strftime("%Y-%m-%d")
+                    ohlcv = await ohlcv_fetcher.fetch_history(symbol, start_dt, end_dt)
+
                     results[symbol] = {
                         "price_info": price_info,
                         "foreign_info": foreign_info,
-                        "supply_demand": supply_demand
+                        "supply_demand": supply_demand,
+                        "ohlcv": ohlcv
                     }
                 except Exception as e:
                     logger.warning("Khong the tai data cho ma %s: %s", symbol, str(e))

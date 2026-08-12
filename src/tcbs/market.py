@@ -143,9 +143,61 @@ class TCBSMarketClient:
         
         raise ValueError(f"Khong tim thay thong tin room nuoc ngoai cho ma {symbol}")
 
+    @catch_tcbs_unauthorized
+    async def get_put_through_deals(self, symbol: str) -> List[Dict[str, Any]]:
+        """Lấy thông tin giao dịch thỏa thuận thực tế của TCBS từ /tartarus/v1/putThroughSnaps"""
+        if settings.TCBS_API_KEY == "dummy_api_key":
+            # Trả về dummy deals chất lượng cao để demo dòng tiền ngầm khi chạy giả lập
+            import random
+            from datetime import datetime, timedelta
+            now = datetime.now()
+            deals = []
+            if symbol in ["HPG", "VIC", "FPT", "GEE"]:
+                # Tạo 1 deal thỏa thuận lớn
+                price = 28000.0 if symbol == "HPG" else 42000.0 if symbol == "VIC" else 130000.0
+                vol = random.randint(5, 15) * 100000 # 500k to 1.5M
+                pct_diff = random.choice([3.2, 4.5, -2.5, -4.0])
+                deal_price = price * (1 + pct_diff / 100)
+                deals.append({
+                    "time": (now - timedelta(minutes=random.randint(10, 60))).strftime("%H:%M:%S"),
+                    "volume": vol,
+                    "price": round(deal_price, 1),
+                    "value": vol * deal_price,
+                    "price_diff_pct": pct_diff
+                })
+            return deals
+
+        # Gọi API thực tế từ TCBS
+        url = f"{self.base_url}/tartarus/v1/putThroughSnaps"
+        try:
+            headers = await self._get_headers()
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(url, headers=headers)
+                if response.status_code == 200:
+                    data = response.json()
+                    deals = []
+                    for item in data.get("data", []):
+                        if item.get("symbol") == symbol:
+                            vol = float(item.get("totalVol") or 0.0)
+                            price = float(item.get("price") or 0.0)
+                            ref_price = float(item.get("refPrice") or price or 1.0)
+                            price_diff = ((price - ref_price) / ref_price) * 100
+                            deals.append({
+                                "time": item.get("time", "15:00:00"),
+                                "volume": vol,
+                                "price": price,
+                                "value": vol * price,
+                                "price_diff_pct": round(price_diff, 2)
+                            })
+                    return deals
+                return []
+        except Exception as e:
+            logger.warning("Loi khi lay putThroughSnaps tu TCBS cho ma %s: %s", symbol, str(e))
+            return []
+
     async def get_deals(self, symbol: str) -> List[Dict[str, Any]]:
-        """Lấy thông tin thỏa thuận (Trống do TCBS openapi khong ho tro)"""
-        return []
+        """Fallback get_deals goi den put_through_deals"""
+        return await self.get_put_through_deals(symbol)
 
     @catch_tcbs_unauthorized
     async def get_match_history(self, symbol: str) -> List[Dict[str, Any]]:

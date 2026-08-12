@@ -28,19 +28,40 @@ class ScannerScorer:
             tech_score = self.technical_criterion.evaluate(symbol, data)
             
             # 3. Diem Momentum/Trend (Trong so 0.2)
-            # Tinh truc tiep dua tren percent_change tu price_info
-            price_info = data.get("price_info", {})
-            pct_change = price_info.get("percent_change", 0.0)
-            momentum_score = 50.0 + (pct_change * 10.0)
-            momentum_score = max(0.0, min(100.0, momentum_score))
+            # Diem co ban
+            wyckoff_score = 60.0
+            ohlcv = data.get("ohlcv")
+            if ohlcv is not None and not ohlcv.empty:
+                try:
+                    close_prices = ohlcv["close"].astype(float)
+                    ma200 = close_prices.rolling(200, min_periods=30).mean().iloc[-1]
+                    last_close = close_prices.iloc[-1]
+                    if ma200 > 0:
+                        dist = abs(last_close - ma200) / ma200
+                        if dist <= 0.05:
+                            wyckoff_score = 85.0
+                        elif dist <= 0.10:
+                            wyckoff_score = 75.0
+                except Exception:
+                    pass
 
-            # 4. Tinh Composite Score (Diem tong hop)
-            composite_score = (vol_score * 0.5) + (tech_score * 0.3) + (momentum_score * 0.2)
+            inst_score = 50.0
+            net_buy_val = foreign_info.get("net_buy_value", 0.0)
+            if net_buy_val > 5000000000:
+                inst_score = 85.0
+            elif net_buy_val > 1000000000:
+                inst_score = 70.0
+            elif net_buy_val < -5000000000:
+                inst_score = 20.0
+
+            # 4. Tinh Confidence Score moi: (0.4 * Wyckoff_Base_Score) + (0.3 * Volume_ZScore) + (0.2 * Institutional_Flow_Score) + (0.1 * Sentiment_Score)
+            sentiment_score = 50.0
+            composite_score = (0.4 * wyckoff_score) + (0.3 * vol_score) + (0.2 * inst_score) + (0.1 * sentiment_score)
             
             detail_scores = {
                 "volume_flow": round(vol_score, 1),
                 "technical": round(tech_score, 1),
-                "momentum": round(momentum_score, 1)
+                "momentum": round(composite_score, 1)
             }
             
             scored_list.append((symbol, round(composite_score, 2), detail_scores))
