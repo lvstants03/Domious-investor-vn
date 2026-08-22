@@ -19,19 +19,6 @@ class TCBSDerivativesMarketClient:
 
     async def get_deriv_price(self, symbol: str) -> Dict[str, Any]:
         """7.1. Thong tin ma, gia phai sinh (GET)"""
-        if settings.TCBS_API_KEY == "dummy_api_key":
-            return {
-                "symbol": symbol,
-                "current_price": 1325.0,
-                "change": 4.5,
-                "percent_change": 0.34,
-                "open_interest": 42500,
-                "basis": -2.3,
-                "trading_volume": 125000,
-                "highest": 1328.0,
-                "lowest": 1318.5
-            }
-
         url = f"{self.base_url}/market/derivatives/{symbol}/price"
         try:
             headers = await self._get_headers()

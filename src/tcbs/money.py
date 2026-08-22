@@ -19,9 +19,6 @@ class TCBSMoneyClient:
 
     async def transfer_internal(self, amount: float, from_account: str, to_account: str) -> Dict[str, Any]:
         """3.1. Chuyen tien noi bo (POST)"""
-        if settings.TCBS_API_KEY == "dummy_api_key":
-            return {"status": "SUCCESS", "message": f"Da chuyen {amount} tu {from_account} sang {to_account} (MOCK)"}
-
         url = f"{self.base_url}/money/transfer"
         body = {
             "amount": amount,
@@ -40,9 +37,6 @@ class TCBSMoneyClient:
 
     async def deposit_margin(self, amount: float, account_id: str) -> Dict[str, Any]:
         """3.3. Nop ky quy (POST)"""
-        if settings.TCBS_API_KEY == "dummy_api_key":
-            return {"status": "SUCCESS", "message": f"Da nop ky quy {amount} vao tai khoan {account_id} (MOCK)"}
-
         url = f"{self.base_url}/money/margin/deposit"
         body = {
             "amount": amount,
@@ -60,9 +54,6 @@ class TCBSMoneyClient:
 
     async def withdraw_margin(self, amount: float, account_id: str) -> Dict[str, Any]:
         """3.2. Rut ky quy (POST)"""
-        if settings.TCBS_API_KEY == "dummy_api_key":
-            return {"status": "SUCCESS", "message": f"Da rut ky quy {amount} tu tai khoan {account_id} (MOCK)"}
-
         url = f"{self.base_url}/money/margin/withdraw"
         body = {
             "amount": amount,

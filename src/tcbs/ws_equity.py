@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import websockets
+from datetime import datetime
 from typing import Dict, Any, List, Callable, Awaitable
 from src.config import settings
 from src.tcbs.auth import auth_provider
@@ -37,34 +38,7 @@ class TCBSEquityWSClient:
                 pass
 
     async def _run_loop(self):
-        # Neu su dung dummy_api_key, ta se gia lap nhan event realtime
-        if settings.TCBS_API_KEY == "dummy_api_key":
-            logger.info("MOCK WS EQUITY: Bat dau gia lap WebSocket feed co so...")
-            import random
-            symbols = ["FPT", "VNM", "HPG", "VIC", "VHM"]
-            while self._running:
-                await asyncio.sleep(random.uniform(1.0, 5.0))
-                symbol = random.choice(symbols)
-                price_change = random.choice([-500, -100, 0, 100, 500])
-                base_price = 128500.0 if symbol == "FPT" else (74200.0 if symbol == "VNM" else 28000.0)
-                price = base_price + price_change
-                volume = random.randint(1, 50) * 100
-                
-                event_data = {
-                    "event": "match",
-                    "symbol": symbol,
-                    "price": price,
-                    "volume": volume,
-                    "time": "14:29:00",
-                    "side": random.choice(["BUY", "SELL"])
-                }
-                
-                for callback in self._callbacks:
-                    try:
-                        await callback(event_data)
-                    except Exception as e:
-                        logger.error("Loi trong callback WS Equity: %s", str(e))
-            return
+
 
         while self._running:
             try:
@@ -82,6 +56,17 @@ class TCBSEquityWSClient:
                             break
                         try:
                             data = json.loads(message)
+                            # Xu ly tin nhan khop lenh realtime qua big_order_tracker
+                            if isinstance(data, dict):
+                                sym = data.get("symbol") or data.get("s")
+                                price = float(data.get("price") or data.get("p", 0))
+                                qty = int(data.get("volume") or data.get("v") or data.get("qty", 0))
+                                side = data.get("side") or data.get("type", "B")
+                                t_str = data.get("time") or datetime.now().strftime("%H:%M:%S")
+                                if sym and price > 0 and qty > 0:
+                                    from src.data_pipeline.big_order_tracker import big_order_tracker
+                                    big_order_tracker.add_order(t_str, sym, price, qty, side)
+
                             for callback in self._callbacks:
                                 await callback(data)
                         except Exception as e:

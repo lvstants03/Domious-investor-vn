@@ -45,8 +45,20 @@ class TCBSAuthenticator:
         except Exception as e:
             logger.error("Khong the ghi token vao cache file: %s", str(e))
 
+    def clear_token(self):
+        """Xoa file cache token va reset trang thai trong bo nho"""
+        self._token = None
+        self._expires_at = 0.0
+        self._otp_id = None
+        if os.path.exists(TOKEN_FILE_PATH):
+            try:
+                os.remove(TOKEN_FILE_PATH)
+                logger.info("Da xoa file cache token TCBS.")
+            except Exception as e:
+                logger.error("Khong the xoa file cache token: %s", str(e))
+
     async def get_token(self, force_refresh: bool = False) -> str:
-        """Lay token hien tai, kiem tra han dung. Neu het han va dang chay giap lap thi tra ve mock token"""
+        """Lay token hien tai, kiem tra han dung."""
         now = time.time()
         
         # Con han su dung (buffer 5 phut)
@@ -54,19 +66,14 @@ class TCBSAuthenticator:
         if self._token and not force_refresh and (self._expires_at - now > buffer_seconds):
             return self._token
             
-        # Truong hop mock token
-        if self.api_key == "dummy_api_key" or not self._token:
-            if settings.TRADING_MODE == "paper":
-                logger.warning("Chua xac thuc hoac token het han. Dang dung mock token cho che do paper trading.")
-                return "mock_jwt_token_for_paper_trading"
-            else:
-                raise ValueError("JWT Token TCBS chua duoc xac thuc hoac da het han. Vui long gui OTP tren giao dien.")
+        if not self._token:
+            raise ValueError("JWT Token TCBS chua duoc xac thuc hoac da het han. Vui long gui OTP tren giao dien.")
                 
         return self._token
 
     def get_custody_code(self) -> str:
-        """Giai ma custodyCode tu JWT token, neu loi hoac dang test thi lay tu settings"""
-        if not self._token or self._token == "mock_jwt_token_for_paper_trading":
+        """Giai ma custodyCode tu JWT token, neu loi hoac chua co thi lay tu settings"""
+        if not self._token:
             return settings.TCBS_CUSTODY_CODE
             
         try:
@@ -92,11 +99,6 @@ class TCBSAuthenticator:
 
     async def request_otp(self) -> str:
         """Buoc 1: Yeu cau OTP tu TCBS, tra ve otpId"""
-        if self.api_key == "dummy_api_key":
-            logger.info("Yeu cau OTP gia lap (dummy_api_key)")
-            self._otp_id = "mock_otp_id_123456"
-            return self._otp_id
-
         url = f"{self.base_url}/gaia/v1/oauth2/openapi/request-otp"
         body = {"apiKey": self.api_key}
         
@@ -114,13 +116,6 @@ class TCBSAuthenticator:
 
     async def submit_otp(self, otp: str, otp_id: Optional[str] = None) -> str:
         """Gui OTP de lay JWT Token (otpId la tuy chon)"""
-        if self.api_key == "dummy_api_key":
-            logger.info("Xac thuc OTP gia lap thanh cong.")
-            self._token = "mock_jwt_token_for_paper_trading"
-            self._expires_at = time.time() + 86400  # 24 tieng
-            self._save_token_to_file()
-            return self._token
-
         url = f"{self.base_url}/gaia/v1/oauth2/openapi/token"
         body = {
             "apiKey": self.api_key,

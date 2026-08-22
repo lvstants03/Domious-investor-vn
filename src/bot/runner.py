@@ -91,16 +91,17 @@ class BotRunner:
             
             success = False
             if signal == "BUY":
-                if config.mode == "paper":
-                    success = await trader.execute_buy(config.id, symbol, qty, current_price)
-                else:
-                    # live_trader can is_derivative flag
-                    success = await trader.execute_buy(config.id, symbol, qty, current_price, is_derivative=is_deriv)
+                # Kiem tra chot chan Market Regime Gate cho co phieu co so
+                if not is_deriv:
+                    from src.data_pipeline.market_regime_gate import market_regime_gate
+                    m_regime = await market_regime_gate.get_market_regime()
+                    if not m_regime.get("is_buy_allowed", True):
+                        logger.warning("Market Regime Gate: Tu dong CHAN lenh MUA ma %s vi VNINDEX dang Downtrend.", symbol)
+                        return False
+
+                success = await trader.execute_buy(config.id, symbol, qty, current_price, is_derivative=is_deriv)
             elif signal == "SELL":
-                if config.mode == "paper":
-                    success = await trader.execute_sell(config.id, symbol, qty, current_price)
-                else:
-                    success = await trader.execute_sell(config.id, symbol, qty, current_price, is_derivative=is_deriv)
+                success = await trader.execute_sell(config.id, symbol, qty, current_price, is_derivative=is_deriv)
 
             # 7. Gui thong bao Discord
             if success:
@@ -123,46 +124,21 @@ class BotRunner:
             return False
 
     async def _fetch_historical_data(self, symbol: str, is_deriv: bool) -> pd.DataFrame:
-        """Gia lap hoac lay historical data thuc te"""
-        # Lay tu TCBS Market Client
+        """Lay historical data thuc te cho chien luoc bot"""
         try:
-            if is_deriv:
-                # Phai sinh: dung price 7.1 de mock
-                res = await deriv_market_client.get_deriv_price(symbol)
-                # Tao DataFrame gia lap
-                price = res.get("current_price", 1320.0)
-            else:
-                res = await market_client.get_price_info(symbol)
-                price = res.get("price", 100000.0)
-
-            # De Strategy chay tot, ta can 1 lich su nến (OHLCV).
-            # Trong thoi gian chay dev, ta se mock 50 nen lich su voi bien do nhe
-            import random
-            from datetime import datetime, timedelta
+            from datetime import date, timedelta
+            from src.data_pipeline.ohlcv_fetcher import ohlcv_fetcher
             
-            data = []
-            now = datetime.utcnow()
-            curr_price = price
+            end_date = date.today().strftime("%Y-%m-%d")
+            start_date = (date.today() - timedelta(days=90)).strftime("%Y-%m-%d")
             
-            for i in range(50, 0, -1):
-                change = random.uniform(-0.02, 0.02)
-                close_p = curr_price - (price * change * (i/50.0))
-                open_p = close_p * (1.0 - random.uniform(-0.005, 0.005))
-                high_p = max(open_p, close_p) * (1.0 + random.uniform(0, 0.01))
-                low_p = min(open_p, close_p) * (1.0 - random.uniform(0, 0.01))
-                
-                data.append({
-                    "timestamp": now - timedelta(days=i),
-                    "open": open_p,
-                    "high": high_p,
-                    "low": low_p,
-                    "close": close_p,
-                    "volume": random.randint(10000, 500000)
-                })
-            
-            df = pd.DataFrame(data)
-            df.set_index("timestamp", inplace=True)
-            return df
+            df = await ohlcv_fetcher.fetch_history(symbol, start_date, end_date)
+            if df is not None and not df.empty:
+                if "trade_date" in df.columns:
+                    df["timestamp"] = pd.to_datetime(df["trade_date"])
+                    df.set_index("timestamp", inplace=True)
+                return df
+            return pd.DataFrame()
         except Exception as e:
             logger.error("Loi khi lay du lieu lich su cho %s: %s", symbol, str(e))
             return pd.DataFrame()

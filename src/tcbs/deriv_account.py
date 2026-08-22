@@ -19,16 +19,6 @@ class TCBSDerivativesAccountClient:
 
     async def get_deriv_account_info(self) -> Dict[str, Any]:
         """6.x. Tai khoan phai sinh (GET)"""
-        if settings.TCBS_API_KEY == "dummy_api_key":
-            return {
-                "account_id": "105C123457",
-                "deposit_amount": 100000000.0,      # So tien nop ky quy tai VSD
-                "available_deposit": 85000000.0,    # So du ky quy kha dung
-                "initial_margin": 15000000.0,      # Ky quy ban dau yeu cau
-                "account_ratio": 78.5,             # Ty le tai khoan
-                "status": "NORMAL"
-            }
-
         url = f"{self.base_url}/account/derivatives"
         try:
             headers = await self._get_headers()

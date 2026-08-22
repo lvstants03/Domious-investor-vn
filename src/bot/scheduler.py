@@ -36,24 +36,12 @@ class BotScheduler:
             return
         
         self._running = True
-        # Lập lịch chạy mỗi 1 phút (hoặc cấu hình tuỳ phiên giao dịch)
-        # Sẽ chạy trong khoảng thời gian phiên giao dịch chính thức (9:00 - 15:00 từ Thứ 2 - Thứ 6)
-        self.scheduler.add_job(
-            self._execute_all_bots,
-            "cron",
-            day_of_week="mon-fri",
-            hour="9-14",
-            minute="*/1",
-            id="trading_bot_job",
-            replace_existing=True
-        )
-        
-        # Job giup dev local chay thu ngoai gio (chay moi 30s de de quan sat)
+        # Lập lịch chạy quét bot định kỳ mỗi 30 giây
         self.scheduler.add_job(
             self._execute_all_bots,
             "interval",
             seconds=30,
-            id="dev_trading_bot_job",
+            id="trading_bot_job",
             replace_existing=True
         )
         

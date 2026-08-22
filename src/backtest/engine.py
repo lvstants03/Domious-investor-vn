@@ -156,7 +156,7 @@ class BacktestEngine:
                     fee = proceeds * (SELL_FEE_PCT + SELL_TAX_PCT)
                     pnl = proceeds - fee - (position["entry_price"] * position["quantity"])
                     pnl_pct = round(pnl / (position["entry_price"] * position["quantity"]) * 100, 2)
-                    capital += pnl
+                    capital += (proceeds - fee)
                     trades.append(TradeRecord(
                         symbol=symbol, entry_date=position["entry_date"], exit_date=trade_date,
                         entry_price=position["entry_price"], exit_price=round(sell_price, 0),
@@ -172,7 +172,7 @@ class BacktestEngine:
                     fee = proceeds * (SELL_FEE_PCT + SELL_TAX_PCT)
                     pnl = proceeds - fee - (position["entry_price"] * position["quantity"])
                     pnl_pct = round(pnl / (position["entry_price"] * position["quantity"]) * 100, 2)
-                    capital += pnl
+                    capital += (proceeds - fee)
                     trades.append(TradeRecord(
                         symbol=symbol, entry_date=position["entry_date"], exit_date=trade_date,
                         entry_price=position["entry_price"], exit_price=round(sell_price, 0),
@@ -213,7 +213,7 @@ class BacktestEngine:
             fee = proceeds * (SELL_FEE_PCT + SELL_TAX_PCT)
             pnl = proceeds - fee - (position["entry_price"] * position["quantity"])
             pnl_pct = round(pnl / (position["entry_price"] * position["quantity"]) * 100, 2)
-            capital += pnl
+            capital += (proceeds - fee)
             trades.append(TradeRecord(
                 symbol=symbol, entry_date=position["entry_date"], exit_date=str(df.iloc[-1]["trade_date"]),
                 entry_price=position["entry_price"], exit_price=round(sell_price, 0),

@@ -268,3 +268,101 @@ class PaperTrade(Base):
     pnl_pct: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     exit_reason: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class WhaleOrderLog(Base):
+    """Bảng lưu vết các lệnh Cá Mập / Lệnh Khủng (>= 200 triệu VNĐ) trên toàn sàn"""
+    __tablename__ = "whale_order_logs"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    symbol: Mapped[str] = mapped_column(String(20), index=True, nullable=False)
+    trade_date: Mapped[date] = mapped_column(Date, index=True, nullable=False)
+    time_str: Mapped[str] = mapped_column(String(10), nullable=False)  # HH:MM:SS
+    side: Mapped[str] = mapped_column(String(5), nullable=False)        # BUY, SELL
+    price: Mapped[float] = mapped_column(Float, nullable=False)
+    volume: Mapped[int] = mapped_column(Integer, nullable=False)
+    value_vnd: Mapped[float] = mapped_column(Float, nullable=False)     # >= 200,000,000
+    tier: Mapped[str] = mapped_column(String(20), default="SHARK")      # SHARK, MEGA
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class SmartMoneyForecastDaily(Base):
+    """Bảng lưu tổng hợp dòng tiền Shark/Wolf và kết quả dự báo T+5, T+10 theo từng phiên"""
+    __tablename__ = "smart_money_forecast_daily"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    trade_date: Mapped[date] = mapped_column(Date, index=True, nullable=False)
+    symbol: Mapped[str] = mapped_column(String(20), index=True, nullable=False)
+    shark_net_val: Mapped[float] = mapped_column(Float, default=0.0)
+    wolf_net_val: Mapped[float] = mapped_column(Float, default=0.0)
+    wyckoff_phase: Mapped[str] = mapped_column(String(50), nullable=False)  # Phase A, B, C, D
+    intent_5d: Mapped[str] = mapped_column(String(50), nullable=False)      # GOM HANG, PHAN PHOI
+    forecast_10d_target: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    confidence_pct: Mapped[float] = mapped_column(Float, default=75.0)
+    risk_level: Mapped[str] = mapped_column(String(20), default="TRUNG BINH")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("trade_date", "symbol", name="uq_smart_money_date_symbol"),)
+
+
+class SectorFlowSnapshot(Base):
+    """Bảng đo lường xung lực và dòng tiền luân chuyển giữa các nhóm ngành trên thị trường"""
+    __tablename__ = "sector_flow_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    trade_date: Mapped[date] = mapped_column(Date, index=True, nullable=False)
+    sector_name: Mapped[str] = mapped_column(String(50), index=True, nullable=False)
+    total_buy_val: Mapped[float] = mapped_column(Float, default=0.0)
+    total_sell_val: Mapped[float] = mapped_column(Float, default=0.0)
+    net_val: Mapped[float] = mapped_column(Float, default=0.0)
+    flow_intensity_pct: Mapped[float] = mapped_column(Float, default=0.0)
+    lead_symbols: Mapped[dict] = mapped_column(JSON, default=list)  # Top ma dan song trong nganh
+    rotation_stage: Mapped[str] = mapped_column(String(30), default="ACCUMULATION") # ACCUMULATION, MARKUP, DISTRIBUTION, REACCUMULATION
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("trade_date", "sector_name", name="uq_sector_flow_date_name"),)
+
+
+class StockFundamentalSnapshot(Base):
+    """Bảng lưu trữ chỉ số cơ bản, định giá và ngành nghề của toàn bộ cổ phiếu trên 3 sàn từ TCBS"""
+    __tablename__ = "stock_fundamental_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    symbol: Mapped[str] = mapped_column(String(20), unique=True, index=True, nullable=False)
+    exchange: Mapped[str] = mapped_column(String(10), default="HOSE")  # HOSE, HNX, UPCOM
+    sector_name: Mapped[str] = mapped_column(String(100), default="Khác")
+    market_cap: Mapped[float] = mapped_column(Float, default=0.0)  # Vốn hóa (VND)
+    pe: Mapped[float] = mapped_column(Float, default=0.0)
+    pb: Mapped[float] = mapped_column(Float, default=0.0)
+    roe: Mapped[float] = mapped_column(Float, default=0.0)
+    eps: Mapped[float] = mapped_column(Float, default=0.0)
+    foreign_room_left: Mapped[float] = mapped_column(Float, default=0.0)
+    last_price: Mapped[float] = mapped_column(Float, default=0.0)
+    avg_volume_10d: Mapped[float] = mapped_column(Float, default=0.0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class PositionHunterForecastLog(Base):
+    """Bảng lưu trữ lịch sử các cơ hội gom hàng chân sóng 1 - 2 tháng (T+30 Position Hunter)"""
+    __tablename__ = "position_hunter_forecast_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    forecast_date: Mapped[date] = mapped_column(Date, index=True, nullable=False)
+    symbol: Mapped[str] = mapped_column(String(20), index=True, nullable=False)
+    sector_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    current_price: Mapped[float] = mapped_column(Float, nullable=False)
+    accumulation_zone: Mapped[str] = mapped_column(String(50), nullable=False)
+    target_1m: Mapped[float] = mapped_column(Float, nullable=False)
+    target_2m: Mapped[float] = mapped_column(Float, nullable=False)
+    stop_loss: Mapped[float] = mapped_column(Float, nullable=False)
+    upside_pct: Mapped[str] = mapped_column(String(20), nullable=False)
+    rr_ratio: Mapped[str] = mapped_column(String(20), default="1 : 3.8")
+    triple_score: Mapped[int] = mapped_column(Integer, default=80)
+    wyckoff_phase: Mapped[str] = mapped_column(String(50), default="Pha B (Tích Lũy)")
+    shark_flow_status: Mapped[str] = mapped_column(String(50), default="Gom ròng")
+    foreign_flow_status: Mapped[str] = mapped_column(String(50), default="Gom ròng")
+    catalyst_summary: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("forecast_date", "symbol", name="uq_hunter_forecast_date_symbol"),)
+

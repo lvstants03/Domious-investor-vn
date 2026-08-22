@@ -21,6 +21,7 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
     handlers=[logging.StreamHandler()]
 )
+logging.getLogger("uvicorn.access").setLevel(logging.INFO)
 logger = logging.getLogger("dominus-investor")
 
 @asynccontextmanager
@@ -38,9 +39,22 @@ async def lifespan(app: FastAPI):
     # Khoi dong Discord Bot Client tuong tac
     await discord_bot.start()
     
+    # Khoi dong TCBS Socket Manager
+    from src.tcbs.socket_manager import socket_manager
+    await socket_manager.start_all()
+    
+    # Khoi dong tien trinh seed du lieu Whale Tracker tu dong o background
+    from src.data_pipeline.big_order_tracker import big_order_tracker
+    import asyncio
+    asyncio.create_task(big_order_tracker.seed_from_market_api())
+    
     bot_scheduler.start()
     yield
     logger.info("Đang tắt dịch vụ DOMINUS Investor...")
+    
+    from src.tcbs.socket_manager import socket_manager
+    await socket_manager.stop_all()
+    
     bot_scheduler.stop()
     await discord_bot.stop()
 
@@ -68,7 +82,7 @@ if __name__ == "__main__":
     uvicorn.run(
         "src.main:app",
         host="0.0.0.0",
-        port=8002,
+        port=8082,
         reload=True
     )
 

@@ -19,18 +19,6 @@ class TCBSDerivativesOrderClient:
 
     async def get_positions(self) -> List[Dict[str, Any]]:
         """6.x. Vi the phai sinh"""
-        if settings.TCBS_API_KEY == "dummy_api_key":
-            return [
-                {
-                    "symbol": "VN30F2608",
-                    "position_type": "LONG",
-                    "quantity": 2,
-                    "avg_cost": 1320.5,
-                    "current_price": 1325.0,
-                    "unrealized_pnl": 900000.0  # 4.5 points * 2 contracts * 100,000 VND/point
-                }
-            ]
-
         url = f"{self.base_url}/orders/derivatives/positions"
         try:
             headers = await self._get_headers()
@@ -44,21 +32,6 @@ class TCBSDerivativesOrderClient:
 
     async def place_deriv_order(self, symbol: str, action: str, qty: int, price: float, order_type: str = "LO") -> Dict[str, Any]:
         """6.x. Dat lenh phai sinh"""
-        if settings.TCBS_API_KEY == "dummy_api_key":
-            import uuid
-            order_id = f"DR-{uuid.uuid4().hex[:8].upper()}"
-            logger.info("MOCK PLACE DERIV ORDER: %s %s contracts %s at %s (%s) -> ID: %s", action, qty, symbol, price, order_type, order_id)
-            return {
-                "order_id": order_id,
-                "status": "SUCCESS",
-                "message": "Lenh phai sinh dat thanh cong (MOCK)",
-                "symbol": symbol,
-                "action": action,
-                "qty": qty,
-                "price": price,
-                "order_type": order_type
-            }
-
         url = f"{self.base_url}/orders/derivatives"
         body = {
             "symbol": symbol,
@@ -79,16 +52,6 @@ class TCBSDerivativesOrderClient:
 
     async def modify_deriv_order(self, order_id: str, qty: int, price: float) -> Dict[str, Any]:
         """6.x. Sua lenh phai sinh"""
-        if settings.TCBS_API_KEY == "dummy_api_key":
-            logger.info("MOCK MODIFY DERIV ORDER: ID %s to qty: %s, price: %s", order_id, qty, price)
-            return {
-                "order_id": order_id,
-                "status": "SUCCESS",
-                "message": "Lenh phai sinh sua thanh cong (MOCK)",
-                "qty": qty,
-                "price": price
-            }
-
         url = f"{self.base_url}/orders/derivatives/{order_id}"
         body = {
             "quantity": qty,
@@ -106,14 +69,6 @@ class TCBSDerivativesOrderClient:
 
     async def cancel_deriv_order(self, order_id: str) -> Dict[str, Any]:
         """6.x. Huy lenh phai sinh"""
-        if settings.TCBS_API_KEY == "dummy_api_key":
-            logger.info("MOCK CANCEL DERIV ORDER: ID %s", order_id)
-            return {
-                "order_id": order_id,
-                "status": "SUCCESS",
-                "message": "Lenh phai sinh huy thanh cong (MOCK)"
-            }
-
         url = f"{self.base_url}/orders/derivatives/{order_id}"
         try:
             headers = await self._get_headers()

@@ -9,9 +9,12 @@ class PaperTrader:
     def __init__(self, db: AsyncSession):
         self.repo = InvestorRepository(db)
 
-    async def execute_buy(self, bot_config_id: int, symbol: str, qty: int, price: float) -> bool:
+    async def execute_buy(self, bot_config_id: int, symbol: str, qty: int, price: float, is_derivative: bool = False) -> bool:
+        if qty <= 0 or price <= 0:
+            logger.warning("PAPER BUY FAILED: So luong hoac gia khong hop le (qty=%s, price=%s)", qty, price)
+            return False
         total_val = qty * price
-        logger.info("PAPER BUY: %s qty: %s at %s. Total: %s", symbol, qty, price, total_val)
+        logger.info("PAPER BUY: %s qty: %s at %s (Phai sinh: %s). Total: %s", symbol, qty, price, is_derivative, total_val)
         
         # 1. Luu trade vao DB o trang thai FILLED
         trade = await self.repo.save_trade(
@@ -37,7 +40,11 @@ class PaperTrader:
         
         return True
 
-    async def execute_sell(self, bot_config_id: int, symbol: str, qty: int, price: float) -> bool:
+    async def execute_sell(self, bot_config_id: int, symbol: str, qty: int, price: float, is_derivative: bool = False) -> bool:
+        if qty <= 0 or price <= 0:
+            logger.warning("PAPER SELL FAILED: So luong hoac gia khong hop le (qty=%s, price=%s)", qty, price)
+            return False
+
         # Kiem tra xem co dang nam giu vi the hay khong
         pos = await self.repo.get_position(bot_config_id, symbol)
         if not pos or pos.quantity <= 0:
@@ -52,7 +59,7 @@ class PaperTrader:
         pnl = (price - pos.avg_cost) * sell_qty
         pnl_pct = ((price - pos.avg_cost) / pos.avg_cost * 100) if pos.avg_cost > 0 else 0.0
 
-        logger.info("PAPER SELL: %s qty: %s at %s. PnL: %s (%s%%)", symbol, sell_qty, price, pnl, pnl_pct)
+        logger.info("PAPER SELL: %s qty: %s at %s (Phai sinh: %s). PnL: %s (%s%%)", symbol, sell_qty, price, is_derivative, pnl, pnl_pct)
 
         # 1. Luu trade vao DB o trang thai FILLED
         trade = await self.repo.save_trade(

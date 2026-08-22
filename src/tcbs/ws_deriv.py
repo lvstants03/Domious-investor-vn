@@ -37,34 +37,7 @@ class TCBSDerivWSClient:
                 pass
 
     async def _run_loop(self):
-        # Neu su dung dummy_api_key, ta se gia lap nhan event realtime phai sinh
-        if settings.TCBS_API_KEY == "dummy_api_key":
-            logger.info("MOCK WS DERIV: Bat dau gia lap WebSocket feed phai sinh...")
-            import random
-            symbols = ["VN30F2608", "VN30F2609"]
-            while self._running:
-                await asyncio.sleep(random.uniform(0.5, 3.0))
-                symbol = random.choice(symbols)
-                price_change = random.choice([-1.5, -0.5, 0.0, 0.5, 1.5])
-                base_price = 1320.0
-                price = base_price + price_change
-                volume = random.randint(1, 10)
-                
-                event_data = {
-                    "event": "deriv_match",
-                    "symbol": symbol,
-                    "price": price,
-                    "volume": volume,
-                    "time": "14:29:00",
-                    "side": random.choice(["BUY", "SELL"])
-                }
-                
-                for callback in self._callbacks:
-                    try:
-                        await callback(event_data)
-                    except Exception as e:
-                        logger.error("Loi trong callback WS Deriv: %s", str(e))
-            return
+
 
         while self._running:
             try:

@@ -1,5 +1,7 @@
 import logging
-from typing import Dict, Any, List, Optional
+import asyncio
+import time
+from typing import Dict, Any, List, Optional, Tuple
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.database.connection import get_db
@@ -47,6 +49,15 @@ async def submit_otp(body: Dict[str, Any]):
         except Exception:
             err_msg = he.response.text or str(he)
         raise HTTPException(status_code=he.response.status_code, detail=f"TCBS: {err_msg}")
+
+@router.post("/auth/clear-token")
+async def clear_token():
+    """Xoa token cu de yeu cau OTP moi"""
+    try:
+        auth_provider.clear_token()
+        return {"status": "SUCCESS", "message": "Da xoa cache token thanh cong"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -56,13 +67,26 @@ from datetime import date, timedelta, datetime
 from src.data_pipeline.ohlcv_fetcher import OHLCVFetcher
 from src.data_pipeline.indicators import indicators
 import pandas as pd
+import re
+from fastapi import Query
+from typing import Optional
 
 ohlcv_fetcher = OHLCVFetcher()
 
 @router.get("/signals/alternative")
-async def get_alternative_signals():
+async def get_alternative_signals(symbols: Optional[str] = Query(None)):
     """Lay cac tin hieu canh bao dong tien va song ngam thuc te tu indicators + TCBS"""
-    symbols = ["HPG", "VIC", "FPT", "GEE", "VNM", "SSI", "TCB", "VND"]
+    if symbols:
+        raw_symbols = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+        valid_symbols = []
+        for sym in raw_symbols:
+            if re.match(r"^[A-Z0-9]{3,8}$", sym):
+                valid_symbols.append(sym)
+        symbols = valid_symbols
+    else:
+        from src.data_pipeline.market_universe_scanner import universe_scanner
+        active_list = await universe_scanner.scan_market_universe()
+        symbols = [s["symbol"] for s in active_list[:8]] if active_list else []
     signals = []
     now = datetime.now()
     
@@ -164,11 +188,83 @@ async def get_auth_status():
     """Lay trang thai xac thuc hien tai"""
     try:
         token = await auth_provider.get_token()
-        if token == "mock_jwt_token_for_paper_trading":
-            return {"authenticated": False, "mode": "mock"}
+        if not token:
+            return {"authenticated": False, "mode": "none"}
         return {"authenticated": True, "mode": "real", "custody_code": auth_provider.get_custody_code()}
     except Exception:
         return {"authenticated": False, "mode": "none"}
+
+
+# --- Socket Manager Endpoints ---
+from pydantic import BaseModel
+from src.tcbs.socket_manager import socket_manager
+
+class SocketControlRequest(BaseModel):
+    socket_name: str
+    action: str
+
+class SocketSubscribeRequest(BaseModel):
+    socket_name: str
+    symbols: List[str]
+
+@router.get("/socket/status")
+async def get_socket_status():
+    """Lay trang thai cua tat ca cac TCBS WebSockets"""
+    return socket_manager.get_all_status()
+
+@router.post("/socket/control")
+async def control_socket(req: SocketControlRequest):
+    """Bat/tat/reconnect mot WebSocket cu the"""
+    client = socket_manager.get_client(req.socket_name)
+    if not client:
+        raise HTTPException(status_code=400, detail=f"Khong tim thay socket: {req.socket_name}")
+    
+    if req.action == "connect":
+        await client.start()
+    elif req.action == "disconnect":
+        await client.stop()
+    elif req.action == "reconnect":
+        await client.stop()
+        await asyncio.sleep(1)
+        await client.start()
+    else:
+        raise HTTPException(status_code=400, detail=f"Hanh dong khong hop le: {req.action}")
+        
+    return {"status": "SUCCESS", "message": f"Da thuc hien {req.action} cho {req.socket_name}"}
+
+@router.post("/socket/subscribe")
+async def subscribe_socket(req: SocketSubscribeRequest):
+    """Subscribe cac ma co phieu cho Thesis hoac Ouranos"""
+    client = socket_manager.get_client(req.socket_name)
+    if not client:
+        raise HTTPException(status_code=400, detail=f"Khong tim thay socket: {req.socket_name}")
+        
+    symbols_str = ",".join([s.upper() for s in req.symbols])
+    
+    # Tao message phu hop tung loai socket
+    if req.socket_name == "thesis":
+        # Format: d|s|tk|bp+bi+tm+mp+op+fe|FPT,VNM
+        sub_msg = f"d|s|tk|bp+bi+tm+mp+op+fe|{symbols_str}"
+    elif req.socket_name == "ouranos":
+        # Format: d|st|C001+C002S60+C002S900|TCB,POW,VIC
+        sub_msg = f"d|st|C001+C002S60+C002S900|{symbols_str}"
+    else:
+        raise HTTPException(status_code=400, detail="Chi ho tro dang ky tin hieu cho socket thesis hoac ouranos")
+        
+    # Luu lai vao active topics de auto-resubscribe neu rot mang
+    if sub_msg not in client.subscribed_topics:
+        client.subscribed_topics.append(sub_msg)
+        
+    await client.send_message(sub_msg)
+    return {"status": "SUCCESS", "message": f"Da gui subscribe cho {req.socket_name}: {sub_msg}"}
+
+@router.get("/socket/logs/{socket_name}")
+async def get_socket_logs(socket_name: str):
+    """Lay log truyen nhan goi tin gan nhat cua mot socket"""
+    client = socket_manager.get_client(socket_name)
+    if not client:
+        raise HTTPException(status_code=400, detail=f"Khong tim thay socket: {socket_name}")
+    return client.logs
 
 
 # --- Market Endpoints ---
@@ -185,7 +281,7 @@ async def get_equity_market_data(symbol: str):
 # --- Account & Order Endpoints ---
 
 @router.get("/account/portfolio")
-async def get_portfolio(account_no: Optional[str] = None):
+async def get_portfolio(account_no: Optional[str] = None, mode: str = Query("live")):
     """4.14. Tra cuu tai san co phieu"""
     try:
         portfolio = await account_client.get_equity_portfolio(account_no)
@@ -194,7 +290,7 @@ async def get_portfolio(account_no: Optional[str] = None):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/account/balance/cash")
-async def get_cash_balance(account_no: Optional[str] = None):
+async def get_cash_balance(account_no: Optional[str] = None, mode: str = Query("live")):
     """4.15. Lay thong tin so du tien"""
     try:
         balance = await account_client.get_cash_balance(account_no)
@@ -617,16 +713,16 @@ async def run_backtest(
     symbol: str,
     start_date: str,
     end_date: str,
-    stop_loss_pct: float = 0.07,
-    take_profit_pct: float = 0.15,
-    position_size_pct: float = 0.10,
+    strategy_name: str = "position_hunter_t30",
+    stop_loss_pct: float = 0.06,
+    take_profit_pct: float = 0.35,
+    position_size_pct: float = 0.25,
     background_tasks: BackgroundTasks = None,
     db: AsyncSession = Depends(get_db)
 ):
-    """Chay backtest chien luoc Wyckoff Spring cho 1 ma"""
+    """Chay backtest chien luoc Position Hunter T+30 hoac Wyckoff Spring"""
     from src.database.models import OHLCVDaily, BacktestRun
     from src.backtest.engine import backtest_engine
-    from src.wyckoff.signal_generator import wyckoff_generator
     from sqlalchemy import select
     from datetime import datetime
     import pandas as pd
@@ -639,8 +735,25 @@ async def run_backtest(
         .order_by(OHLCVDaily.trade_date.asc())
     )
     rows = list(ohlcv_result.scalars().all())
+    
     if len(rows) < 80:
-        raise HTTPException(status_code=400, detail="Khong du du lieu OHLCV (can it nhat 80 phien)")
+        # Fallback tai du lieu lich su tu TCBS qua historical_loader neu DB chua du
+        try:
+            from src.data_pipeline.historical_loader import historical_loader
+            await historical_loader.load_symbol(symbol.upper(), days=500)
+            ohlcv_result = await db.execute(
+                select(OHLCVDaily)
+                .where(OHLCVDaily.symbol == symbol.upper(),
+                       OHLCVDaily.trade_date >= start_date,
+                       OHLCVDaily.trade_date <= end_date)
+                .order_by(OHLCVDaily.trade_date.asc())
+            )
+            rows = list(ohlcv_result.scalars().all())
+        except Exception:
+            pass
+
+    if len(rows) < 30:
+        raise HTTPException(status_code=400, detail="Khong du du lieu OHLCV (can it nhat 30 phien)")
 
     df = pd.DataFrame([
         {"trade_date": r.trade_date, "open": r.open, "high": r.high,
@@ -648,28 +761,33 @@ async def run_backtest(
         for r in rows
     ])
 
-    def wyckoff_strategy_fn(ohlcv_df, params):
-        """Chien luoc Wyckoff: tin hieu Spring = BUY signal"""
-        import pandas as pd
-        signals = pd.Series([False] * len(ohlcv_df))
-        base_det = __import__("src.wyckoff.base_detector", fromlist=["BaseDetector"]).BaseDetector()
-        spring_det = __import__("src.wyckoff.spring_detector", fromlist=["SpringDetector"]).SpringDetector()
-        base = base_det.detect_base(ohlcv_df, lookback=params.get("lookback", 60))
-        if base is None:
+    if strategy_name == "position_hunter_t30":
+        from src.backtest.strategies.position_hunter_strategy import position_hunter_t30_strategy_fn
+        chosen_strategy_fn = position_hunter_t30_strategy_fn
+        strategy_params = {"min_vol_spike": 1.8, "min_momentum": 0.02, "max_dist_52w": 0.20}
+    else:
+        def wyckoff_strategy_fn(ohlcv_df, params):
+            signals = pd.Series([False] * len(ohlcv_df))
+            base_det = __import__("src.wyckoff.base_detector", fromlist=["BaseDetector"]).BaseDetector()
+            spring_det = __import__("src.wyckoff.spring_detector", fromlist=["SpringDetector"]).SpringDetector()
+            base = base_det.detect_base(ohlcv_df, lookback=params.get("lookback", 60))
+            if base is None:
+                return signals
+            spring = spring_det.detect_spring(ohlcv_df, base)
+            if spring is None:
+                return signals
+            spring_idx = ohlcv_df.index[ohlcv_df["trade_date"] == spring.date].tolist()
+            if spring_idx:
+                signals.iloc[spring_idx[0]] = True
             return signals
-        spring = spring_det.detect_spring(ohlcv_df, base)
-        if spring is None:
-            return signals
-        spring_idx = ohlcv_df.index[ohlcv_df["trade_date"] == spring.date].tolist()
-        if spring_idx:
-            signals.iloc[spring_idx[0]] = True
-        return signals
+        chosen_strategy_fn = wyckoff_strategy_fn
+        strategy_params = {"lookback": 60}
 
     result = backtest_engine.run(
         symbol=symbol.upper(),
         ohlcv_df=df,
-        strategy_fn=wyckoff_strategy_fn,
-        params={"lookback": 60},
+        strategy_fn=chosen_strategy_fn,
+        params=strategy_params,
         stop_loss_pct=stop_loss_pct,
         take_profit_pct=take_profit_pct,
         position_size_pct=position_size_pct
@@ -677,12 +795,12 @@ async def run_backtest(
 
     # Luu vao DB
     run_record = BacktestRun(
-        name=f"Wyckoff_{symbol}_{start_date}_{end_date}",
-        strategy_name="wyckoff_spring",
+        name=f"{strategy_name}_{symbol}_{start_date}_{end_date}",
+        strategy_name=strategy_name,
         symbol=symbol.upper(),
         start_date=datetime.strptime(start_date, "%Y-%m-%d"),
         end_date=datetime.strptime(end_date, "%Y-%m-%d"),
-        strategy_params={"lookback": 60, "stop_loss_pct": stop_loss_pct, "take_profit_pct": take_profit_pct},
+        strategy_params=strategy_params,
         initial_capital=100_000_000,
         final_capital=result.final_capital,
         total_return_pct=result.total_return_pct,
@@ -937,9 +1055,24 @@ async def get_market_breadth_api(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/account/margin/risk")
-async def get_account_margin_risk(account_no: Optional[str] = None):
-    """Lấy thông tin margin, Rtt và nợ margin thực tế từ TCBS API qua /hydros/v1/account/{accountNo}/risk"""
+async def get_account_margin_risk(account_no: Optional[str] = None, mode: str = Query("live")):
+    """Lay ty le margin, Rtt va chi tiet cac loai no tu TCBS API (/hydros/v1/account/{accountNo}/risk)"""
     try:
+        if mode == "paper":
+            return {
+                "account_no": account_no or "PAPER_MARGIN",
+                "rtt": 135.2,
+                "outstanding": 320000000.0,
+                "accrued_interest": 4500000.0,
+                "due_amount": 0.0,
+                "overdue_amount": 0.0,
+                "total_fee_debt": 0.0,
+                "initial_margin": 50.0,
+                "maintenance_margin": 35.0,
+                "liquidation_margin": 30.0,
+                "risk_status_code": "NORMAL",
+                "risk_status_desc": "An toan"
+            }
         return await account_client.get_margin_risk(account_no)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -947,7 +1080,7 @@ async def get_account_margin_risk(account_no: Optional[str] = None):
 
 @router.get("/account/sub-accounts")
 async def get_account_sub_accounts():
-    """Lấy danh sách tiểu khoản chứng khoán thực tế từ TCBS"""
+    """Lay danh sach tieu khoan chung khoan thuc te tu TCBS"""
     try:
         return await account_client.get_sub_accounts()
     except Exception as e:
@@ -956,79 +1089,290 @@ async def get_account_sub_accounts():
 
 @router.get("/account/margin/overview")
 async def get_account_margin_overview():
-    """Lấy thông tin tổng hợp hạn mức ký quỹ margin thực tế từ TCBS"""
+    """Lay toan bo danh sach han muc margin cua cac tieu khoan tu /aion/v1/customers/{custodyId}/accounts"""
     try:
         return await account_client.get_margin_overview()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/account/margin/addons")
+async def get_account_margin_addons(account_no: Optional[str] = None):
+    """Lay chi tiet goi vay bo tro (Marginsure, T+) tu TCBS"""
+    try:
+        return await account_client.get_margin_addons(account_no)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/account/margin/debt-details")
+async def get_account_margin_debt_details(account_no: Optional[str] = None):
+    """Tra cuu thong tin no margin chi tiet tu /erebos/v2/digital/margin-info"""
+    try:
+        return await account_client.get_margin_debt_details(account_no)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/account/margin/pricing-policies")
+async def get_account_pricing_policies(account_no: Optional[str] = None):
+    """Lay danh sach pricing policy kha dung tu /hydros/v1/account/{accountNo}/pricing-policy"""
+    try:
+        return await account_client.get_pricing_policies(account_no)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/account/loans")
+async def get_account_loans(account_no: Optional[str] = None):
+    """Lay danh sach khoan vay tu /khaos/v1/loan/{accountNo}"""
+    try:
+        return await account_client.get_loans_list(account_no)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/orders/buying-power")
+async def get_account_buying_power():
+    """Lay suc mua tong quat tu /aion/v1/accounts/{accountNo}/ppse"""
+    try:
+        return await equity_order_client.get_buying_power()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/orders/buying-power/{symbol}")
+async def get_buying_power_for_symbol(symbol: str):
+    """Lay suc mua theo ma tu /aion/v1/accounts/{accountNo}/ppse/{symbol}"""
+    try:
+        return await equity_order_client.get_buying_power_for_symbol(symbol)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/orders/buying-power/{symbol}/{price}")
+async def get_buying_power_for_symbol_price(symbol: str, price: float):
+    """Lay suc mua theo ma va muc gia tu /aion/v1/accounts/{accountNo}/ppse/{symbol}/{price}"""
+    try:
+        return await equity_order_client.get_buying_power_for_symbol_price(symbol, price)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/account/margin/stress-test")
+async def get_margin_stress_test(account_no: Optional[str] = None):
+    """Mo phong Stress-Test sut giam thi truong va du phong diem chay tai khoan / Call Margin"""
+    try:
+        from src.engine.smart_margin_risk_engine import smart_margin_risk_engine
+        portfolio = await account_client.get_equity_portfolio(account_no)
+        cash_data = await account_client.get_cash_balance(account_no)
+        margin_risk = await account_client.get_margin_risk(account_no)
+        
+        cash_val = float(cash_data.get("available_cash", 0.0))
+        return smart_margin_risk_engine.simulate_margin_stress_test(portfolio, cash_val, margin_risk)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/account/margin/loan-optimizer")
+async def get_margin_loan_optimizer(account_no: Optional[str] = None):
+    """Phan tich toi uu hoa lai vay margin, canh bao buoc nhay bac thang T+ va dao no 90 ngay"""
+    try:
+        from src.engine.smart_margin_risk_engine import smart_margin_risk_engine
+        debts = await account_client.get_margin_debt_details(account_no)
+        loans = await account_client.get_loans_list(account_no)
+        pricing_policies = await account_client.get_pricing_policies(account_no)
+        
+        return smart_margin_risk_engine.analyze_loan_ladder_optimization(debts, loans, pricing_policies)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/orders")
+async def get_account_orders():
+    """Lay toan bo so lenh cua tieu khoan tu /aion/v1/accounts/{accountNo}/orders"""
+    try:
+        return await equity_order_client.get_order_book()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/orders/executions")
+async def get_account_order_executions():
+    """Lay thong tin chi tiet khop lenh tu /aion/v1/accounts/{accountNo}/matching-details"""
+    try:
+        return await equity_order_client.get_executions()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/orders/{order_id}")
+async def get_account_order_by_id(order_id: str):
+    """Lay chi tiet lenh theo Order ID tu /aion/v1/accounts/{accountNo}/orders/{orderID}"""
+    try:
+        return await equity_order_client.get_order_by_id(order_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/account/balance")
+async def get_account_balance(account_no: Optional[str] = None):
+    """Lay thong tin so du tien tu /aion/v1/accounts/{accountNo}/cashInvestments"""
+    try:
+        return await account_client.get_cash_balance(account_no)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/account/portfolio")
+async def get_account_portfolio(account_no: Optional[str] = None):
+    """Lay danh muc co phieu tu /aion/v1/accounts/{accountNo}/se"""
+    try:
+        return await account_client.get_equity_portfolio(account_no)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/account/statement")
+async def get_account_statement(start_date: str = Query("2026-01-01"), end_date: str = Query("2026-08-21")):
+    """Lay thong tin sao ke tien tu /erebos/v2/digital/trans-hist-cashStatements"""
+    try:
+        return await account_client.get_cash_statement(start_date, end_date)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+_FLOW_CACHE: Dict[str, Tuple[float, Any]] = {}
+_DEPTH_CACHE: Dict[str, Tuple[float, Any]] = {}
+
 @router.get("/market/depth/{symbol}")
 async def get_market_bid_ask_depth(symbol: str):
-    """Lấy độ sâu thị trường Bid/Ask 3 cấp thực tế từ TCBS API"""
-    import random
-    base_price = 50000
+    """Lấy độ sâu thị trường Bid/Ask 3 cấp thực tế 100% từ TCBS tickerCommons & tickerSnaps Open API"""
+    sym_upper = symbol.upper()
+    now = time.time()
+
+    # Fast in-memory cache (1.5s)
+    if sym_upper in _DEPTH_CACHE:
+        cache_time, cached_val = _DEPTH_CACHE[sym_upper]
+        if (now - cache_time) < 1.5:
+            return cached_val
+    
+    # 1. Ưu tiên lấy trực tiếp từ tickerCommons của riêng mã đó (chính xác 100%)
+    matched_item = None
     try:
-        market_info = await market_client.get_price_info(symbol.upper())
-        if market_info and market_info.get("price", 0) > 0:
-            base_price = int(market_info["price"])
-    except Exception as e:
-        # Fallback khi chưa có xác thực iOTP hoặc API lỗi
-        if symbol.upper() == "FPT":
-            base_price = 135000
-        elif symbol.upper() == "HPG":
-            base_price = 28000
-        elif symbol.upper() == "VNM":
-            base_price = 68000
-        elif symbol.upper() == "GEE":
-            base_price = 76500
+        matched_item = await market_client.get_ticker_commons(sym_upper)
+    except Exception:
+        matched_item = None
+    
+    # 2. Nếu chưa có, lấy từ universe_scanner cache
+    if not matched_item:
+        from src.data_pipeline.market_universe_scanner import universe_scanner
+        for item in universe_scanner._universe_cache:
+            if str(item.get("symbol") or item.get("ticker", "")).strip().upper() == sym_upper:
+                matched_item = item
+                break
 
-    tick_size = 100
-    if base_price < 50000:
-        tick_size = 50
-    elif base_price >= 100000:
-        tick_size = 100
+    # 3. Nếu chưa có, quét song song cả 3 sàn (HOSE, HNX, UPCOM) cùng lúc
+    if not matched_item:
+        try:
+            tasks = [
+                market_client.get_ticker_snaps(index=1),
+                market_client.get_ticker_snaps(index=3),
+                market_client.get_ticker_snaps(index=5)
+            ]
+            snaps_results = await asyncio.gather(*tasks, return_exceptions=True)
+            for res in snaps_results:
+                if isinstance(res, list):
+                    for item in res:
+                        if str(item.get("symbol") or item.get("ticker", "")).strip().upper() == sym_upper:
+                            matched_item = item
+                            break
+                if matched_item:
+                    break
+        except Exception as e:
+            logger.debug("Loi khi quet tickerSnaps song song cho %s: %s", sym_upper, str(e))
 
-    bid_prices = [base_price - tick_size, base_price - 2 * tick_size, base_price - 3 * tick_size]
-    ask_prices = [base_price + tick_size, base_price + 2 * tick_size, base_price + 3 * tick_size]
+    # 3. Bóc tách dữ liệu 3 mức giá mua & bán thực tế
+    bids = []
+    asks = []
+    last_price = 0.0
 
-    return {
-        "symbol": symbol.upper(),
-        "bid": [
-            {"price": bid_prices[0], "volume": random.randint(10000, 50000)},
-            {"price": bid_prices[1], "volume": random.randint(20000, 80000)},
-            {"price": bid_prices[2], "volume": random.randint(30000, 100000)}
-        ],
-        "ask": [
-            {"price": ask_prices[0], "volume": random.randint(10000, 50000)},
-            {"price": ask_prices[1], "volume": random.randint(20000, 80000)},
-            {"price": ask_prices[2], "volume": random.randint(30000, 100000)}
-        ],
-        "last_price": base_price
+    if matched_item:
+        # Giá khớp thực tế
+        raw_p = float(matched_item.get("matchPrice") or matched_item.get("price") or matched_item.get("closePrice") or matched_item.get("refPrice") or 0.0)
+        last_price = round(raw_p * 1000) if (0 < raw_p < 1000) else round(raw_p)
+
+        # 3 mức giá Mua (Bid 1, 2, 3)
+        for i in range(1, 4):
+            bp = float(matched_item.get(f"bidPrice0{i}") or 0.0)
+            bv = int(matched_item.get(f"bidQtty0{i}") or 0)
+            bp_norm = round(bp * 1000) if (0 < bp < 1000) else round(bp)
+            if bp_norm > 0 or bv > 0:
+                bids.append({"price": bp_norm, "volume": bv})
+
+        # 3 mức giá Bán (Ask / Offer 1, 2, 3)
+        for i in range(1, 4):
+            ap = float(matched_item.get(f"offerPrice0{i}") or 0.0)
+            av = int(matched_item.get(f"offerQtty0{i}") or 0)
+            ap_norm = round(ap * 1000) if (0 < ap < 1000) else round(ap)
+            if ap_norm > 0 or av > 0:
+                asks.append({"price": ap_norm, "volume": av})
+
+        # Khối ngoại thực tế
+        f_buy = float(matched_item.get("buyForeignQtty") or 0.0)
+        f_sell = float(matched_item.get("sellForeignQtty") or 0.0)
+        f_net_vol = int(f_buy - f_sell)
+        f_net_val = round((f_net_vol * last_price) / 1e9, 2)
+        f_room = float(matched_item.get("room") or matched_item.get("foreign_room_left") or 0.0)
+        
+        foreign_data = {
+            "net_val": f_net_val,
+            "net_vol": f_net_vol,
+            "room_left": f_room,
+            "foreign_buy_pct": 0.0
+        }
+    else:
+        foreign_data = {"net_val": 0.0, "net_vol": 0, "room_left": 0.0, "foreign_buy_pct": 0.0}
+
+    result = {
+        "symbol": sym_upper,
+        "bid": bids,
+        "ask": asks,
+        "last_price": last_price,
+        "foreign": foreign_data
     }
+    _DEPTH_CACHE[sym_upper] = (now, result)
+    return result
 
 
 @router.get("/market/flow/{symbol}")
-async def get_smart_money_flow(symbol: str):
-    """Lấy dòng tiền ròng Shark và Wolf trong phiên thực tế từ TCBS"""
+async def get_smart_money_flow(symbol: str, mode: str = Query("live")):
+    """Lấy dòng tiền ròng Shark và Wolf trong phiên thực tế từ TCBS (Chạy song song + Cache)"""
     symbol_upper = symbol.upper()
+    now = time.time()
+
+    # Fast in-memory cache (3.0s)
+    if symbol_upper in _FLOW_CACHE:
+        cache_time, cached_val = _FLOW_CACHE[symbol_upper]
+        if (now - cache_time) < 3.0:
+            return cached_val
+
     flow_data = []
-    
-    # 1. Goi thuc te API bsa tu TCBS
-    try:
-        flow_data = await market_client.get_shark_flow(symbol_upper)
-    except Exception as e:
-        logger.error("Loi khi lay bsa shark flow cho ma %s: %s", symbol_upper, str(e))
-        
-    # 2. Lay giao dich thoa thuan put-through thuc te
-    deals = []
-    try:
-        deals = await market_client.get_put_through_deals(symbol_upper)
-    except Exception:
-        pass
-        
     block_deals_res = []
-    if deals and len(deals) > 0:
+
+    # Chạy song song cả 2 API TCBS
+    flow_task = market_client.get_shark_flow(symbol_upper)
+    deals_task = market_client.get_put_through_deals(symbol_upper)
+
+    results = await asyncio.gather(flow_task, deals_task, return_exceptions=True)
+
+    if isinstance(results[0], list):
+        flow_data = results[0]
+    elif isinstance(results[0], Exception):
+        logger.error("Loi khi lay shark flow cho ma %s: %s", symbol_upper, str(results[0]))
+
+    if isinstance(results[1], list):
+        deals = results[1]
         for deal in deals:
             block_deals_res.append({
                 "time": deal.get("time", "15:00:00"),
@@ -1036,45 +1380,29 @@ async def get_smart_money_flow(symbol: str):
                 "volume": int(deal.get("volume") or 0),
                 "value_vnd": float(deal.get("value") or 0.0)
             })
-    else:
-        # Fallback deals chat luong cao de giao dien luon co data sinh dong
-        base_price = 50000
-        try:
-            market_info = await market_client.get_price_info(symbol_upper)
-            if market_info and market_info.get("price", 0) > 0:
-                base_price = int(market_info["price"])
-        except Exception:
-            if symbol_upper == "FPT": base_price = 135000
-            elif symbol_upper == "HPG": base_price = 28000
-            elif symbol_upper == "GEE": base_price = 76500
-        tick = 50 if base_price < 50000 else 100
-        block_deals_res = [
-            {"time": "10:15:30", "price": base_price - tick, "volume": 50000, "value_vnd": 50000 * (base_price - tick)},
-            {"time": "11:22:15", "price": base_price + tick, "volume": 120000, "value_vnd": 120000 * (base_price + tick)},
-            {"time": "14:10:45", "price": base_price, "volume": 80000, "value_vnd": 80000 * base_price}
-        ]
 
-    return {
+    from datetime import date
+    trade_date = flow_data[0]["trade_date"] if flow_data else date.today().strftime("%Y-%m-%d")
+
+    res = {
         "symbol": symbol_upper,
+        "trade_date": trade_date,
         "flow": flow_data,
         "block_deals": block_deals_res
     }
+    _FLOW_CACHE[symbol_upper] = (now, res)
+    return res
 
 
 @router.get("/derivative/holdings")
-async def get_derivative_holdings():
-    """Lay danh sach vi the phai sinh VN30F dang mo (gia lap)"""
-    return [
-        {
-            "symbol": "VN30F2608",
-            "position": "LONG",
-            "quantity": 5,
-            "entry_price": 1285.4,
-            "current_price": 1289.2,
-            "unrealized_pnl": 3800000,
-            "margin_requirement": 45000000
-        }
-    ]
+async def get_derivative_holdings(mode: str = Query("live")):
+    """Lay danh sach vi the phai sinh VN30F dang mo"""
+    try:
+        from src.tcbs.deriv_orders import deriv_order_client
+        positions = await deriv_order_client.get_positions()
+        return positions
+    except Exception:
+        return []
 
 
 @router.post("/orders/derivative")
@@ -1089,3 +1417,102 @@ async def execute_derivative_order(order_data: dict):
         "status": "SUCCESS",
         "message": f"Dat lenh {action} {quantity} HDVN30F cho ma {symbol} tai gia {price} thanh cong!"
     }
+
+
+@router.get("/market/whale/overview")
+async def get_whale_overview(
+    symbol: Optional[str] = Query(None),
+    timeframe: str = Query("1d")
+):
+    """Lay toan bo data bundle cho cac widget theo doi Dong tien Ca map / Lenh lon"""
+    try:
+        from src.data_pipeline.big_order_tracker import big_order_tracker
+        import asyncio
+        if len(big_order_tracker.recent_orders) <= 22 and not big_order_tracker._is_seeding:
+            asyncio.create_task(big_order_tracker.seed_from_market_api())
+        data = big_order_tracker.get_overview(symbol_filter=symbol, timeframe=timeframe)
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/market/foreign-flow/overview")
+async def get_foreign_flow_overview(
+    timeframe: str = Query("1d"),
+    symbol: Optional[str] = Query(None)
+):
+    """Lay ban do chuyen dong dong tien Khoi Ngoai (Inflow / Outflow, Top gom/xa, Smart Money Alignment)"""
+    try:
+        from src.data_pipeline.foreign_flow_tracker import foreign_flow_tracker
+        return await foreign_flow_tracker.get_foreign_flow_overview(timeframe=timeframe, symbol_filter=symbol)
+    except Exception as e:
+        logger.error("Loi khi lay foreign flow overview: %s", str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/market/whale/recent-orders")
+async def get_whale_recent_orders(
+    symbol: Optional[str] = Query(None),
+    side: Optional[str] = Query(None),
+    min_value: Optional[float] = Query(None)
+):
+    """Lay danh sach cac lenh lon gan nhat kem bo loc linh hoat"""
+    try:
+        from src.data_pipeline.big_order_tracker import big_order_tracker
+        overview = big_order_tracker.get_overview(symbol_filter=symbol)
+        orders = overview["recent_orders"]
+        
+        if side:
+            side_upper = side.strip().upper()
+            orders = [o for o in orders if o["side"] == side_upper]
+            
+        if min_value and min_value > 0:
+            orders = [o for o in orders if o["value_ty"] >= min_value]
+            
+        return orders
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/market/sector-rotation/forecast")
+async def get_sector_rotation_forecast():
+    """Lấy bản đồ luân chuyển dòng tiền 12 nhóm ngành và các khuyến nghị đón đầu T+5 & T+10"""
+    try:
+        from src.engine.sector_rotation_predictor import SectorRotationPredictor
+        predictor = SectorRotationPredictor()
+        return predictor.predict_sector_rotation()
+    except Exception as e:
+        logger.error("Loi khi tinh toan sector rotation forecast: %s", str(e), exc_info=True)
+        try:
+            from datetime import datetime
+            from src.data_pipeline.big_order_tracker import big_order_tracker
+            from src.data_pipeline.sector_flow_calculator import SectorFlowCalculator
+            calc = SectorFlowCalculator()
+            symbol_stats = getattr(big_order_tracker, "symbol_stats", {})
+            flows = calc.calculate_sector_flow(symbol_stats)
+            return {
+                "analysis_time": datetime.now().strftime("%H:%M:%S %d/%m/%Y"),
+                "sector_flows": flows,
+                "market_summary": {
+                    "total_shark_turnover": 0.0,
+                    "total_shark_net": 0.0,
+                    "leading_count": len([f for f in flows if f.get("rotation_stage") == "MARKUP"]),
+                    "accumulating_count": len([f for f in flows if f.get("rotation_stage") == "ACCUMULATION"]),
+                    "distributing_count": len([f for f in flows if f.get("rotation_stage") == "DISTRIBUTION"])
+                },
+                "recommendations": []
+            }
+        except Exception as inner_e:
+            raise HTTPException(status_code=500, detail=str(inner_e))
+
+
+@router.get("/market/position-hunter/forecast")
+async def get_position_hunter_forecast(basket: str = "ALL"):
+    """Lấy danh mục cổ phiếu siêu tiềm năng đón đầu sóng lớn 1 - 2 tháng (T+20 ~ T+40) theo rổ chỉ số"""
+    try:
+        from src.engine.position_hunter_predictor import position_hunter_predictor
+        return await position_hunter_predictor.scan_medium_term_opportunities(basket=basket)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
