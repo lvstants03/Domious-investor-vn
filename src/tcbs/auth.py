@@ -21,17 +21,25 @@ class TCBSAuthenticator:
         self._load_token_from_file()
         
     def _load_token_from_file(self):
-        """Doc token da luu tu tep de tranh phai nhap lai OTP sau moi lan reload"""
+        """Doc token da luu tu tep, tu dong don dep neu token da het han"""
         if os.path.exists(TOKEN_FILE_PATH):
             try:
                 with open(TOKEN_FILE_PATH, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                    self._token = data.get("token")
-                    self._expires_at = data.get("expires_at", 0.0)
-                    logger.info("Da khoi phuc JWT Token TCBS tu cache file. Con han den: %s", 
-                                time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self._expires_at)))
+                    token = data.get("token")
+                    expires_at = data.get("expires_at", 0.0)
+                    now = time.time()
+                    if token and expires_at - now > (settings.JWT_REFRESH_BUFFER_MIN * 60):
+                        self._token = token
+                        self._expires_at = expires_at
+                        logger.info("Da khoi phuc JWT Token TCBS tu cache file. Con han den: %s", 
+                                    time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self._expires_at)))
+                    else:
+                        logger.warning("Cache token TCBS da het han hoac khong hop le. Dang xoa cache file...")
+                        self.clear_token()
             except Exception as e:
                 logger.warning("Khong the doc token cache file: %s", str(e))
+                self.clear_token()
 
     def _save_token_to_file(self):
         """Ghi token xuong file de cache"""
@@ -60,16 +68,15 @@ class TCBSAuthenticator:
     async def get_token(self, force_refresh: bool = False) -> str:
         """Lay token hien tai, kiem tra han dung."""
         now = time.time()
+        buffer_seconds = settings.JWT_REFRESH_BUFFER_MIN * 60
         
         # Con han su dung (buffer 5 phut)
-        buffer_seconds = settings.JWT_REFRESH_BUFFER_MIN * 60
         if self._token and not force_refresh and (self._expires_at - now > buffer_seconds):
             return self._token
             
-        if not self._token:
-            raise ValueError("JWT Token TCBS chua duoc xac thuc hoac da het han. Vui long gui OTP tren giao dien.")
-                
-        return self._token
+        # Neu khong co token hoac da het han, don dep va bao loi
+        self.clear_token()
+        raise ValueError("JWT Token TCBS chua duoc xac thuc hoac da het han. Vui long gui OTP tren giao dien.")
 
     def get_custody_code(self) -> str:
         """Giai ma custodyCode tu JWT token, neu loi hoac chua co thi lay tu settings"""

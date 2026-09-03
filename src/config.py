@@ -25,6 +25,26 @@ class Settings(BaseSettings):
     JWT_REFRESH_BUFFER_MIN: int = 5
     LOG_LEVEL: str = "INFO"
     
+    # Dominus Media Intelligence & Gemini
+    GOOGLE_API_KEY: Optional[str] = None
+    GEMINI_MODEL: str = "gemini-1.5-flash"
+    
+    # Discord Multi-Channel Webhooks
+    DISCORD_WEBHOOK_URL: Optional[str] = None
+    DISCORD_WEBHOOK_MORNING: Optional[str] = None
+    DISCORD_WEBHOOK_SHARK: Optional[str] = None
+    DISCORD_WEBHOOK_CLOSE: Optional[str] = None
+    DISCORD_WEBHOOK_WEEKLY: Optional[str] = None
+    
+    # News Crawler & Catalyst Parameters
+    CRAWL_INTERVAL_TRADING_MIN: int = 15
+    CRAWL_INTERVAL_OFFHOURS_MIN: int = 90
+    TRADING_START: str = "08:30"
+    TRADING_END: str = "16:00"
+    NEWS_BOOST_MAX: float = 15.0
+    NEWS_IMPACT_THRESHOLD: float = 6.0
+    NEWS_URGENCY_HOURS: int = 2
+    
     model_config = SettingsConfigDict(
         env_file=__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.abspath(__file__))), ".env"),
         env_file_encoding="utf-8",

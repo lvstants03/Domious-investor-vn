@@ -366,3 +366,59 @@ class PositionHunterForecastLog(Base):
 
     __table_args__ = (UniqueConstraint("forecast_date", "symbol", name="uq_hunter_forecast_date_symbol"),)
 
+
+class SignalLog(Base):
+    """Bang luu tru moi tin hieu tu PositionHunter de do luong track record"""
+    __tablename__ = "signals_log"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    symbol: Mapped[str] = mapped_column(String(10), index=True, nullable=False)
+    score: Mapped[float] = mapped_column(Float, nullable=False)
+    regime: Mapped[str] = mapped_column(String(30), nullable=False)
+    price_entry: Mapped[float] = mapped_column(Float, nullable=False)
+    sector: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    shark_flow: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    news_boost: Mapped[float] = mapped_column(Float, default=0.0)
+    action_badge: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    signaled_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    track_records: Mapped[List["TrackRecord"]] = relationship("TrackRecord", back_populates="signal", cascade="all, delete-orphan")
+
+
+class TrackRecord(Base):
+    """Bang danh gia hieu qua sinh loi T+3 va T+5 cua tung tin hieu"""
+    __tablename__ = "track_record"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    signal_id: Mapped[int] = mapped_column(ForeignKey("signals_log.id"), nullable=False, index=True)
+    price_t3: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    price_t5: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    return_t3: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    return_t5: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    is_hit_t3: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    is_hit_t5: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    evaluated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    signal: Mapped["SignalLog"] = relationship("SignalLog", back_populates="track_records")
+
+
+class NewsItem(Base):
+    """Bang luu tru tin tuc cao tu cac nguon RSS va danh gia boi Gemini"""
+    __tablename__ = "news_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    source: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
+    url: Mapped[str] = mapped_column(String(1000), unique=True, nullable=False)
+    url_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    summary: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
+    category: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    sentiment: Mapped[int] = mapped_column(Integer, default=0)
+    impact_score: Mapped[float] = mapped_column(Float, default=0.0)
+    sectors_affected: Mapped[list] = mapped_column(JSON, default=list)
+    symbols_affected: Mapped[list] = mapped_column(JSON, default=list)
+    published_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    crawled_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    is_processed: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_injected: Mapped[bool] = mapped_column(Boolean, default=False)
+

@@ -26,7 +26,7 @@ class TradeRecord:
     quantity: int
     pnl: Optional[float]
     pnl_pct: Optional[float]
-    exit_reason: Optional[str]  # STOP_LOSS, TAKE_PROFIT, EOD
+    exit_reason: Optional[str]  # STOP_LOSS, TAKE_PROFIT_1, TAKE_PROFIT_2, TRAILING_MA20, VOLUME_CLIMAX_EXIT, EOD
 
 
 @dataclass
@@ -48,17 +48,19 @@ class BacktestResult:
 
 class BacktestEngine:
     """
-    Vectorized Backtest Engine cho chien luoc Wyckoff Spring.
+    Vectorized Backtest Engine nang cap cho chien luoc Position Hunter T+30.
     
-    Quy tac mo phong:
+    Quy tac mo phong nang cap toan dien:
     - Tin hieu xuat hien ngay T -> Mua tai Open ngay T+1
-    - Stop-loss va Take-profit duoc kiem tra theo Close hang ngay
+    - Stop-loss dong theo ATR (1.8x ATR14) tranh ru bo
+    - Chot loi 2 tang (Partial TP 50% tai TP1 +18%, 50% con lai theo Trailing MA20 / TP2 +35%)
+    - Trailing Stop MA20 khi loi nhuan vuot +10%
+    - Volume Climax Exit: Chot loi toan bo khi gap phien Vol > 3.2x kem nen do
     - Slippage ap dung khi tinh gia mua/ban thuc te
     - Phi giao dich va thue duoc tru ra khi dong vi the
     """
 
     def __init__(self, large_cap_symbols: Optional[List[str]] = None):
-        # Danh sach ma von hoa lon (slippage thap hon)
         self.large_cap = set(large_cap_symbols or [
             "VHM", "VIC", "VNM", "VCB", "BID", "CTG", "GAS", "SAB",
             "HPG", "FPT", "MBB", "TCB", "VPB", "ACB", "STB"
@@ -81,7 +83,6 @@ class BacktestEngine:
     def _calc_sqn(self, trade_pnl_pcts: List[float]) -> float:
         """
         System Quality Number (SQN) = (Mean_R / Std_R) * sqrt(N).
-        SQN > 2.5 = tot, > 3.0 = rat tot.
         """
         if len(trade_pnl_pcts) < 3:
             return 0.0
@@ -108,14 +109,12 @@ class BacktestEngine:
         strategy_fn: Callable,
         params: dict,
         initial_capital: float = 100_000_000,
-        position_size_pct: float = 0.10,
-        stop_loss_pct: float = 0.07,
-        take_profit_pct: float = 0.15
+        position_size_pct: float = 0.25,
+        stop_loss_pct: float = 0.06,
+        take_profit_pct: float = 0.35
     ) -> BacktestResult:
         """
-        Chay backtest cho 1 ma co phieu.
-
-        strategy_fn(df, params) -> pd.Series[bool]: signal Series (True = BUY tren thanh do)
+        Chay backtest cho 1 ma co phieu voi ho tro ATR Stop Loss, 2-Stage TP & Volume Climax Exit.
         """
         if ohlcv_df is None or len(ohlcv_df) < 30:
             return BacktestResult(
@@ -126,6 +125,21 @@ class BacktestEngine:
 
         df = ohlcv_df.sort_values("trade_date").reset_index(drop=True)
         slippage = self._get_slippage(symbol)
+
+        # Tinh toan ATR(14), MA20 va SMA20 Volume
+        highs = df["high"].values
+        lows = df["low"].values
+        closes = df["close"].values
+        vols = df["volume"].values
+        
+        tr_list = [highs[0] - lows[0]]
+        for j in range(1, len(df)):
+            tr = max(highs[j] - lows[j], abs(highs[j] - closes[j - 1]), abs(lows[j] - closes[j - 1]))
+            tr_list.append(tr)
+        
+        atr14 = pd.Series(tr_list).rolling(14, min_periods=5).mean().values
+        ma20 = pd.Series(closes).rolling(20, min_periods=10).mean().values
+        sma20_vol = pd.Series(vols).rolling(20, min_periods=10).mean().values
 
         # Sinh tin hieu
         try:
@@ -138,19 +152,66 @@ class BacktestEngine:
         equity_curve = [capital]
         trades: List[TradeRecord] = []
 
-        position = None  # {entry_price, quantity, stop_loss, take_profit, entry_date}
+        position = None  # Dict luu vi the
 
         for i in range(1, len(df)):
             row = df.iloc[i]
             prev_signal = signals.iloc[i - 1] if i - 1 < len(signals) else False
             close = float(row["close"])
             open_price = float(row["open"])
+            curr_vol = float(row["volume"])
             trade_date = str(row["trade_date"])
+            curr_ma20 = ma20[i] if not np.isnan(ma20[i]) else close
+            curr_atr = atr14[i] if not np.isnan(atr14[i]) else (close * 0.03)
+            curr_avg_vol = sma20_vol[i] if not np.isnan(sma20_vol[i]) else 1.0
 
-            # Dong vi the neu co
+            # Xu ly vi the dang mo
             if position is not None:
-                # Kiem tra Stop-loss (dung Close de mo phong)
-                if close <= position["stop_loss"]:
+                unrealized_gain = (close - position["entry_price"]) / position["entry_price"]
+
+                # 1. Volume Climax Exit: Chot loi toan bo khi gap phien phan phoi cao trao
+                is_vol_climax = (curr_vol >= 3.2 * curr_avg_vol) and (close < open_price) and (unrealized_gain >= 0.08)
+                if is_vol_climax:
+                    sell_price = close * (1 - slippage)
+                    proceeds = sell_price * position["quantity"]
+                    fee = proceeds * (SELL_FEE_PCT + SELL_TAX_PCT)
+                    pnl = proceeds - fee - (position["entry_price"] * position["quantity"])
+                    pnl_pct = round(pnl / (position["entry_price"] * position["quantity"]) * 100, 2)
+                    capital += (proceeds - fee)
+                    trades.append(TradeRecord(
+                        symbol=symbol, entry_date=position["entry_date"], exit_date=trade_date,
+                        entry_price=position["entry_price"], exit_price=round(sell_price, 0),
+                        quantity=position["quantity"], pnl=round(pnl, 0), pnl_pct=pnl_pct,
+                        exit_reason="VOLUME_CLIMAX_EXIT"
+                    ))
+                    position = None
+
+                # 2. Trailing Stop MA20 neu vi the da lai >= +10%
+                elif unrealized_gain >= 0.10 and curr_ma20 > position["stop_loss"]:
+                    position["stop_loss"] = max(position["stop_loss"], curr_ma20 * 0.99)
+
+                # 3. Chot loi Tang 1 (50% vi the khi dat TP1 +18%)
+                if position is not None and not position["partial_tp_done"] and close >= position["tp1"]:
+                    half_qty = int(position["quantity"] / 2 / 100) * 100
+                    if half_qty > 0:
+                        sell_price = close * (1 - slippage)
+                        proceeds = sell_price * half_qty
+                        fee = proceeds * (SELL_FEE_PCT + SELL_TAX_PCT)
+                        pnl = proceeds - fee - (position["entry_price"] * half_qty)
+                        pnl_pct = round(pnl / (position["entry_price"] * half_qty) * 100, 2)
+                        capital += (proceeds - fee)
+                        trades.append(TradeRecord(
+                            symbol=symbol, entry_date=position["entry_date"], exit_date=trade_date,
+                            entry_price=position["entry_price"], exit_price=round(sell_price, 0),
+                            quantity=half_qty, pnl=round(pnl, 0), pnl_pct=pnl_pct,
+                            exit_reason="TAKE_PROFIT_1"
+                        ))
+                        position["quantity"] -= half_qty
+                        position["partial_tp_done"] = True
+                        position["stop_loss"] = max(position["stop_loss"], position["entry_price"])
+
+                # 4. Kiem tra Stop-loss
+                if position is not None and close <= position["stop_loss"]:
                     sell_price = close * (1 - slippage)
                     proceeds = sell_price * position["quantity"]
                     fee = proceeds * (SELL_FEE_PCT + SELL_TAX_PCT)
@@ -165,8 +226,8 @@ class BacktestEngine:
                     ))
                     position = None
 
-                # Kiem tra Take-profit
-                elif close >= position["take_profit"]:
+                # 5. Kiem tra Chot loi Tang 2 hoac gay MA20 khi da qua TP1
+                elif position is not None and position["partial_tp_done"] and (close >= position["tp2"] or close < curr_ma20 * 0.985):
                     sell_price = close * (1 - slippage)
                     proceeds = sell_price * position["quantity"]
                     fee = proceeds * (SELL_FEE_PCT + SELL_TAX_PCT)
@@ -177,15 +238,31 @@ class BacktestEngine:
                         symbol=symbol, entry_date=position["entry_date"], exit_date=trade_date,
                         entry_price=position["entry_price"], exit_price=round(sell_price, 0),
                         quantity=position["quantity"], pnl=round(pnl, 0), pnl_pct=pnl_pct,
-                        exit_reason="TAKE_PROFIT"
+                        exit_reason="TAKE_PROFIT_2" if close >= position["tp2"] else "TRAILING_MA20"
                     ))
                     position = None
 
-            # Mo vi the moi neu co tin hieu va chua co vi the
+                # 6. Kiem tra Full TP neu chua qua TP1 ma no vuot thang TP2
+                elif position is not None and close >= position["tp2"]:
+                    sell_price = close * (1 - slippage)
+                    proceeds = sell_price * position["quantity"]
+                    fee = proceeds * (SELL_FEE_PCT + SELL_TAX_PCT)
+                    pnl = proceeds - fee - (position["entry_price"] * position["quantity"])
+                    pnl_pct = round(pnl / (position["entry_price"] * position["quantity"]) * 100, 2)
+                    capital += (proceeds - fee)
+                    trades.append(TradeRecord(
+                        symbol=symbol, entry_date=position["entry_date"], exit_date=trade_date,
+                        entry_price=position["entry_price"], exit_price=round(sell_price, 0),
+                        quantity=position["quantity"], pnl=round(pnl, 0), pnl_pct=pnl_pct,
+                        exit_reason="TAKE_PROFIT_FULL"
+                    ))
+                    position = None
+
+            # Mo vi the moi khi co tin hieu
             if position is None and prev_signal:
                 buy_price = open_price * (1 + slippage)
                 position_value = capital * position_size_pct
-                quantity = int(position_value / buy_price / 100) * 100  # Lam tron xuong 100 co
+                quantity = int(position_value / buy_price / 100) * 100
                 if quantity <= 0:
                     equity_curve.append(capital)
                     continue
@@ -195,11 +272,21 @@ class BacktestEngine:
                     equity_curve.append(capital)
                     continue
                 capital -= cost
+
+                # Tinh Stop-loss dong theo 1.8x ATR (gioi han tu 4% den 8.5%)
+                atr_dist = 1.8 * curr_atr
+                min_sl = buy_price * 0.04
+                max_sl = buy_price * 0.085
+                effective_sl_dist = max(min_sl, min(max_sl, atr_dist))
+                sl_price = buy_price - effective_sl_dist
+
                 position = {
                     "entry_price": round(buy_price, 0),
                     "quantity": quantity,
-                    "stop_loss": buy_price * (1 - stop_loss_pct),
-                    "take_profit": buy_price * (1 + take_profit_pct),
+                    "stop_loss": round(sl_price, 0),
+                    "tp1": round(buy_price * 1.18, 0),
+                    "tp2": round(buy_price * (1 + take_profit_pct), 0),
+                    "partial_tp_done": False,
                     "entry_date": trade_date
                 }
 
@@ -221,7 +308,7 @@ class BacktestEngine:
                 exit_reason="EOD"
             ))
 
-        # Tinh cac metrics
+        # Tinh toan cac chi so danh gia
         total_return_pct = round((capital - initial_capital) / initial_capital * 100, 2)
         win_trades = [t for t in trades if (t.pnl or 0) > 0]
         win_rate = round(len(win_trades) / len(trades) * 100, 1) if trades else 0.0

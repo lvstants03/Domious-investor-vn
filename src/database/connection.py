@@ -7,11 +7,13 @@ from src.database.models import Base
 logger = logging.getLogger("dominus-investor.database.connection")
 
 db_url = settings.DATABASE_URL
-# Chuyen doi psycopg2 sang asyncpg neu can thiet
-if db_url.startswith("postgresql://"):
-    db_url = db_url.replace("postgresql://", "postgresql+asyncpg://")
+# Chuyen doi chuoi Render / Heroku / PostgreSQL sang asyncpg
+if db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql+asyncpg://", 1)
+elif db_url.startswith("postgresql://"):
+    db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
 elif db_url.startswith("postgresql+psycopg2://"):
-    db_url = db_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://")
+    db_url = db_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://", 1)
 
 connect_args = {}
 if "sqlite" in db_url:

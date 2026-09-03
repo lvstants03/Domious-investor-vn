@@ -14,6 +14,7 @@ from contextlib import asynccontextmanager
 from src.config import settings
 from src.api.routes import router as api_router
 from src.api.ws import router as ws_router
+from src.api.media_routes import router as media_router
 
 # Logging Setup
 logging.basicConfig(
@@ -48,10 +49,15 @@ async def lifespan(app: FastAPI):
     import asyncio
     asyncio.create_task(big_order_tracker.seed_from_market_api())
     
+    # Khoi dong Media Intelligence Scheduler tu dong
+    from src.publish.scheduler import media_scheduler
+    media_scheduler.start()
+    
     bot_scheduler.start()
     yield
     logger.info("Đang tắt dịch vụ DOMINUS Investor...")
     
+    media_scheduler.stop()
     from src.tcbs.socket_manager import socket_manager
     await socket_manager.stop_all()
     
@@ -77,6 +83,7 @@ app.add_middleware(
 # Register routers
 app.include_router(api_router)
 app.include_router(ws_router)
+app.include_router(media_router)
 
 if __name__ == "__main__":
     uvicorn.run(

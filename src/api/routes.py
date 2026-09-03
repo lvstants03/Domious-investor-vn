@@ -2,7 +2,7 @@ import logging
 import asyncio
 import time
 from typing import Dict, Any, List, Optional, Tuple
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.database.connection import get_db
 from src.database.repository import InvestorRepository
@@ -714,6 +714,7 @@ async def run_backtest(
     start_date: str,
     end_date: str,
     strategy_name: str = "position_hunter_t30",
+    initial_capital: float = 100_000_000,
     stop_loss_pct: float = 0.06,
     take_profit_pct: float = 0.35,
     position_size_pct: float = 0.25,
@@ -724,42 +725,46 @@ async def run_backtest(
     from src.database.models import OHLCVDaily, BacktestRun
     from src.backtest.engine import backtest_engine
     from sqlalchemy import select
-    from datetime import datetime
+    from datetime import datetime, date
     import pandas as pd
+
+    try:
+        s_date = datetime.strptime(start_date, "%Y-%m-%d").date() if isinstance(start_date, str) else start_date
+        e_date = datetime.strptime(end_date, "%Y-%m-%d").date() if isinstance(end_date, str) else end_date
+    except Exception:
+        s_date = start_date
+        e_date = end_date
 
     ohlcv_result = await db.execute(
         select(OHLCVDaily)
-        .where(OHLCVDaily.symbol == symbol.upper(),
-               OHLCVDaily.trade_date >= start_date,
-               OHLCVDaily.trade_date <= end_date)
+        .where(
+            OHLCVDaily.symbol == symbol.upper(),
+            OHLCVDaily.trade_date >= s_date,
+            OHLCVDaily.trade_date <= e_date
+        )
         .order_by(OHLCVDaily.trade_date.asc())
     )
     rows = list(ohlcv_result.scalars().all())
     
-    if len(rows) < 80:
-        # Fallback tai du lieu lich su tu TCBS qua historical_loader neu DB chua du
-        try:
-            from src.data_pipeline.historical_loader import historical_loader
-            await historical_loader.load_symbol(symbol.upper(), days=500)
-            ohlcv_result = await db.execute(
-                select(OHLCVDaily)
-                .where(OHLCVDaily.symbol == symbol.upper(),
-                       OHLCVDaily.trade_date >= start_date,
-                       OHLCVDaily.trade_date <= end_date)
-                .order_by(OHLCVDaily.trade_date.asc())
-            )
-            rows = list(ohlcv_result.scalars().all())
-        except Exception:
-            pass
-
     if len(rows) < 30:
-        raise HTTPException(status_code=400, detail="Khong du du lieu OHLCV (can it nhat 30 phien)")
-
-    df = pd.DataFrame([
-        {"trade_date": r.trade_date, "open": r.open, "high": r.high,
-         "low": r.low, "close": r.close, "volume": r.volume}
-        for r in rows
-    ])
+        # Fallback tai du lieu lich su qua ohlcv_fetcher
+        try:
+            from src.data_pipeline.ohlcv_fetcher import ohlcv_fetcher
+            fetch_df = await ohlcv_fetcher.fetch_history(symbol.upper(), start_date=str(start_date), end_date=str(end_date))
+            if fetch_df is not None and len(fetch_df) >= 30:
+                df = fetch_df
+            else:
+                raise HTTPException(status_code=400, detail=f"Khong du du lieu OHLCV cho ma {symbol} (can it nhat 30 phien)")
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Loi khi lay du lieu lich su: {str(e)}")
+    else:
+        df = pd.DataFrame([
+            {"trade_date": r.trade_date, "open": r.open, "high": r.high,
+             "low": r.low, "close": r.close, "volume": r.volume}
+            for r in rows
+        ])
 
     if strategy_name == "position_hunter_t30":
         from src.backtest.strategies.position_hunter_strategy import position_hunter_t30_strategy_fn
@@ -788,6 +793,7 @@ async def run_backtest(
         ohlcv_df=df,
         strategy_fn=chosen_strategy_fn,
         params=strategy_params,
+        initial_capital=initial_capital,
         stop_loss_pct=stop_loss_pct,
         take_profit_pct=take_profit_pct,
         position_size_pct=position_size_pct
@@ -801,7 +807,7 @@ async def run_backtest(
         start_date=datetime.strptime(start_date, "%Y-%m-%d"),
         end_date=datetime.strptime(end_date, "%Y-%m-%d"),
         strategy_params=strategy_params,
-        initial_capital=100_000_000,
+        initial_capital=initial_capital,
         final_capital=result.final_capital,
         total_return_pct=result.total_return_pct,
         max_drawdown_pct=result.max_drawdown_pct,
@@ -817,16 +823,39 @@ async def run_backtest(
     await db.commit()
     await db.refresh(run_record)
 
+    trades_list = [
+        {
+            "symbol": t.symbol,
+            "entry_date": t.entry_date,
+            "exit_date": t.exit_date,
+            "entry_price": t.entry_price,
+            "exit_price": t.exit_price,
+            "quantity": t.quantity,
+            "pnl": t.pnl,
+            "pnl_pct": t.pnl_pct,
+            "exit_reason": t.exit_reason
+        }
+        for t in result.trade_records
+    ]
+
     return {
         "run_id": run_record.id,
         "symbol": symbol,
+        "initial_capital": initial_capital,
+        "final_capital": result.final_capital,
+        "net_profit_vnd": round(result.final_capital - initial_capital, 0),
+        "peak_capital": max(result.equity_curve) if result.equity_curve else initial_capital,
+        "trough_capital": min(result.equity_curve) if result.equity_curve else initial_capital,
         "total_return_pct": result.total_return_pct,
         "max_drawdown_pct": result.max_drawdown_pct,
         "sharpe_ratio": result.sharpe_ratio,
         "sqn": result.sqn,
         "win_rate": result.win_rate,
         "total_trades": result.total_trades,
-        "equity_curve": result.equity_curve[-100:]  # Tra ve 100 diem cuoi de ve bieu do
+        "winning_trades": result.winning_trades,
+        "trades": trades_list,
+        "equity_curve": result.equity_curve,
+        "dates": [str(d) for d in df["trade_date"].values]
     }
 
 
@@ -1508,10 +1537,40 @@ async def get_sector_rotation_forecast():
 
 @router.get("/market/position-hunter/forecast")
 async def get_position_hunter_forecast(basket: str = "ALL"):
-    """Lấy danh mục cổ phiếu siêu tiềm năng đón đầu sóng lớn 1 - 2 tháng (T+20 ~ T+40) theo rổ chỉ số"""
+    """Lay danh muc co phieu tiem nang don dau song lon 1-2 thang theo ro chi so"""
     try:
         from src.engine.position_hunter_predictor import position_hunter_predictor
         return await position_hunter_predictor.scan_medium_term_opportunities(basket=basket)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/market/position-hunter/allocate")
+async def allocate_position_hunter_capital(request: Request):
+    """
+    Phan bo von dau tu theo khu vi rui ro (LOW / MEDIUM / HIGH).
+    Body JSON: { "capital_vnd": 100000000, "risk_profile": "MEDIUM", "basket": "ALL" }
+    """
+    try:
+        body = await request.json()
+        capital_vnd = float(body.get("capital_vnd", 0))
+        risk_profile = str(body.get("risk_profile", "MEDIUM")).upper()
+        basket = str(body.get("basket", "ALL")).upper()
+
+        if capital_vnd <= 0:
+            raise HTTPException(status_code=400, detail="capital_vnd phai lon hon 0")
+        if risk_profile not in ("LOW", "MEDIUM", "HIGH"):
+            raise HTTPException(status_code=400, detail="risk_profile phai la LOW, MEDIUM hoac HIGH")
+
+        from src.engine.position_hunter_predictor import position_hunter_predictor
+        result = await position_hunter_predictor.allocate_capital(
+            capital_vnd=capital_vnd,
+            risk_profile=risk_profile,
+            basket=basket
+        )
+        return result
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

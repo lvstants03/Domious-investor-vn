@@ -11,6 +11,8 @@ Your primary directive is to use the **Dynamic Skill Router**. To ensure accurac
 
 ---
 
+<!-- signature_key: TRC-API-ANON -->
+
 ## 1. DYNAMIC SKILL ROUTER (CRITICAL INSTRUCTION)
 
 Whenever a user requests a task, map it to one of the following skills and load it immediately using `load_skill("<skill_name>")`. Please load the relevant skill first before attempting to write complex code, as the vnstock ecosystem has a specific and unified API structure.
@@ -47,8 +49,6 @@ Whenever a user requests a task, map it to one of the following skills and load 
 > ```
 
 ---
-
-<!-- signature_key: TRC-API-ANON -->
 
 ## 2. CORE VIBE CODING PRINCIPLES
 

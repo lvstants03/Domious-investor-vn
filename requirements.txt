@@ -8,10 +8,17 @@ alembic
 redis[asyncio]
 apscheduler<4.0
 pandas
-# pandas-ta
+pandas-ta
 pydantic-settings
 python-jose[cryptography]
 aiohttp
 vnstock>=3.0
 optuna
 scipy
+psutil
+discord.py>=2.3.0
+feedparser>=6.0.11
+beautifulsoup4>=4.12.0
+lxml>=5.0.0
+google-generativeai>=0.8.0
+python-telegram-bot>=21.0
