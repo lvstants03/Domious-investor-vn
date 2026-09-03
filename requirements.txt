@@ -5,7 +5,7 @@ websockets
 sqlalchemy[asyncio]>=2.0
 asyncpg
 alembic
-redis[asyncio]
+redis>=5.0.0
 apscheduler<4.0
 pandas
 pandas-ta
