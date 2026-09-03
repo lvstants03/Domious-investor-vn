@@ -8,7 +8,7 @@ alembic
 redis>=5.0.0
 apscheduler<4.0
 pandas
-pandas-ta
+pandas-ta>=0.4.0b0
 pydantic-settings
 python-jose[cryptography]
 aiohttp
