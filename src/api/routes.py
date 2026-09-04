@@ -1451,15 +1451,16 @@ async def execute_derivative_order(order_data: dict):
 @router.get("/market/whale/overview")
 async def get_whale_overview(
     symbol: Optional[str] = Query(None),
-    timeframe: str = Query("1d")
+    timeframe: str = Query("1d"),
+    filter_type: str = Query("all")
 ):
-    """Lay toan bo data bundle cho cac widget theo doi Dong tien Ca map / Lenh lon"""
+    """Lay toan bo data bundle cho cac widget theo doi Dong tien Ca map / Lenh lon va Khoi ngoai"""
     try:
         from src.data_pipeline.big_order_tracker import big_order_tracker
         import asyncio
         if len(big_order_tracker.recent_orders) <= 22 and not big_order_tracker._is_seeding:
             asyncio.create_task(big_order_tracker.seed_from_market_api())
-        data = big_order_tracker.get_overview(symbol_filter=symbol, timeframe=timeframe)
+        data = big_order_tracker.get_overview(symbol_filter=symbol, timeframe=timeframe, filter_type=filter_type)
         return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

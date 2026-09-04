@@ -46,8 +46,10 @@ async def lifespan(app: FastAPI):
     
     # Khoi dong tien trinh seed du lieu Whale Tracker tu dong o background
     from src.data_pipeline.big_order_tracker import big_order_tracker
+    from src.data_pipeline.foreign_order_detector import run_foreign_detector_loop
     import asyncio
     asyncio.create_task(big_order_tracker.seed_from_market_api())
+    asyncio.create_task(run_foreign_detector_loop())
     
     # Khoi dong Media Intelligence Scheduler tu dong
     from src.publish.scheduler import media_scheduler

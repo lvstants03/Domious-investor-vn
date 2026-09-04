@@ -194,8 +194,38 @@ class BigOrderTracker:
 
         return order
 
-    def get_overview(self, symbol_filter: Optional[str] = None, timeframe: str = "1d") -> Dict[str, Any]:
-        """Tong hop data bundle cho 5 widget dashboard theo timeframe"""
+    def add_foreign_cluster(self, cluster: Dict[str, Any]):
+        """Them 1 cum lenh gom tang hinh cua khoi ngoai vao he thong"""
+        order = {
+            "time": cluster["time"],
+            "symbol": cluster["symbol"].upper(),
+            "price": float(cluster["price"]),
+            "qty": int(cluster["qty"]),
+            "value": float(cluster["value"]),
+            "value_ty": float(cluster["value_ty"]),
+            "side": cluster["side"],
+            "sector": cluster["sector"],
+            "is_foreign": True,
+            "is_foreign_cluster": True,
+            "order_count": cluster.get("order_count", 1),
+            "cluster_note": cluster.get("cluster_note", "")
+        }
+        self.recent_orders.appendleft(order)
+
+        # Cap nhat vao Symbol Stats
+        sym = order["symbol"]
+        val_ty = order["value_ty"]
+        if sym not in self.symbol_stats:
+            self.symbol_stats[sym] = {"buy": 0.0, "sell": 0.0, "net": 0.0}
+        if order["side"] == "BUY":
+            self.symbol_stats[sym]["buy"] += val_ty
+            self.symbol_stats[sym]["net"] += val_ty
+        else:
+            self.symbol_stats[sym]["sell"] += val_ty
+            self.symbol_stats[sym]["net"] -= val_ty
+
+    def get_overview(self, symbol_filter: Optional[str] = None, timeframe: str = "1d", filter_type: str = "all") -> Dict[str, Any]:
+        """Tong hop data bundle cho 5 widget dashboard theo timeframe va bo loc khoi ngoai"""
         multiplier_map = {
             "1m": 0.02,
             "15m": 0.15,
@@ -253,6 +283,11 @@ class BigOrderTracker:
             sf = symbol_filter.strip().upper()
             orders = [o for o in orders if o["symbol"] == sf]
             mega = [o for o in mega if o["symbol"] == sf]
+
+        if filter_type == "foreign_only":
+            orders = [o for o in orders if o.get("is_foreign")]
+        elif filter_type == "shark_only":
+            orders = [o for o in orders if not o.get("is_foreign")]
 
         orders.sort(key=lambda x: x.get("time", ""), reverse=True)
 
@@ -344,7 +379,7 @@ class BigOrderTracker:
                     })
 
         # 6. Overall stats
-        target_orders = orders if symbol_filter else list(self.recent_orders)
+        target_orders = orders
         total_buy = sum(o["value_ty"] for o in target_orders if o["side"] == "BUY") * factor
         total_sell = sum(o["value_ty"] for o in target_orders if o["side"] == "SELL") * factor
         total_order_count = max(len(target_orders), int(len(target_orders) * factor)) if factor >= 1.0 else max(1, int(len(target_orders) * factor))
