@@ -174,7 +174,17 @@ class BigOrderTracker:
         except Exception:
             pass
 
-        # 6. Gui canh bao Discord neu la lenh sieu khung
+        # 6. Gui lenh vao queue de luu ben vung xuong Database
+        try:
+            from src.data_pipeline.whale_order_storage import whale_order_storage
+            tier_val = "MEGA" if val >= self.mega_threshold else "SHARK"
+            order_to_save = dict(order)
+            order_to_save["tier"] = tier_val
+            whale_order_storage.enqueue(order_to_save)
+        except Exception as e:
+            logger.debug("Khong the enqueue lenh ca map vao storage: %s", str(e))
+
+        # 7. Gui canh bao Discord neu la lenh sieu khung
         if send_alert and val >= self.mega_threshold:
             import asyncio
             side_str = "MUA KHỦNG" if side_norm == "BUY" else "BÁN KHỦNG"
@@ -404,5 +414,86 @@ class BigOrderTracker:
                 "net_ty": round(total_buy - total_sell, 1)
             }
         }
+
+    def populate_from_db_records(self, records: List[Any]) -> int:
+        """
+        Nap toan bo cac ban ghi tu bang whale_order_logs vao bo nho RAM
+        (recent_orders, mega_orders, symbol_stats, sector_stats, timeline_buckets).
+        """
+        loaded = 0
+        for rec in records:
+            try:
+                sym = str(rec.symbol).upper()
+                sector = get_sector_by_symbol(sym)
+                side_norm = "BUY" if str(rec.side).upper() in ["BUY", "B", "MUA"] else "SELL"
+                val = float(rec.value_vnd)
+                val_ty = val / 1_000_000_000.0
+                is_foreign = (str(rec.tier).upper() == "FOREIGN")
+
+                order = {
+                    "time": rec.time_str,
+                    "symbol": sym,
+                    "price": float(rec.price),
+                    "qty": int(rec.volume),
+                    "value": val,
+                    "value_ty": round(val_ty, 2),
+                    "side": side_norm,
+                    "sector": sector,
+                    "is_foreign": is_foreign,
+                    "tier": rec.tier
+                }
+
+                # 1. Recent orders
+                self.recent_orders.appendleft(order)
+
+                # 2. Mega orders (>= 5 ty)
+                if val >= self.mega_threshold or str(rec.tier).upper() == "MEGA":
+                    self.mega_orders.append(order)
+
+                # 3. Symbol stats
+                if sym not in self.symbol_stats:
+                    self.symbol_stats[sym] = {"buy": 0.0, "sell": 0.0, "net": 0.0}
+                if side_norm == "BUY":
+                    self.symbol_stats[sym]["buy"] += val_ty
+                    self.symbol_stats[sym]["net"] += val_ty
+                else:
+                    self.symbol_stats[sym]["sell"] += val_ty
+                    self.symbol_stats[sym]["net"] -= val_ty
+
+                # 4. Sector stats
+                if sector not in self.sector_stats:
+                    self.sector_stats[sector] = {"buy": 0.0, "sell": 0.0, "net": 0.0}
+                if side_norm == "BUY":
+                    self.sector_stats[sector]["buy"] += val_ty
+                    self.sector_stats[sector]["net"] += val_ty
+                else:
+                    self.sector_stats[sector]["sell"] += val_ty
+                    self.sector_stats[sector]["net"] -= val_ty
+
+                # 5. Timeline buckets
+                try:
+                    parts = rec.time_str.split(":")
+                    h = int(parts[0])
+                    m = int(parts[1])
+                    m_bucket = (m // 5) * 5
+                    t_key = f"{h:02d}:{m_bucket:02d}"
+                    if t_key in self.timeline_buckets:
+                        if side_norm == "BUY":
+                            self.timeline_buckets[t_key]["buy"] += val_ty
+                            self.timeline_buckets[t_key]["net"] += val_ty
+                        else:
+                            self.timeline_buckets[t_key]["sell"] += val_ty
+                            self.timeline_buckets[t_key]["net"] -= val_ty
+                except Exception:
+                    pass
+
+                loaded += 1
+            except Exception as e:
+                logger.debug("Loi khi nap ban ghi tu DB vao RAM: %s", str(e))
+
+        # Sap xep lai mega orders
+        self.mega_orders.sort(key=lambda x: x["value"], reverse=True)
+        self.mega_orders = self.mega_orders[:30]
+        return loaded
 
 big_order_tracker = BigOrderTracker()

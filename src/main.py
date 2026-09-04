@@ -44,6 +44,11 @@ async def lifespan(app: FastAPI):
     from src.tcbs.socket_manager import socket_manager
     await socket_manager.start_all()
     
+    # Khoi dong storage worker va warmup du lieu tu CSDL
+    from src.data_pipeline.whale_order_storage import whale_order_storage
+    await whale_order_storage.start_worker()
+    await whale_order_storage.warmup_from_db()
+
     # Khoi dong tien trinh seed du lieu Whale Tracker tu dong o background
     from src.data_pipeline.big_order_tracker import big_order_tracker
     from src.data_pipeline.foreign_order_detector import run_foreign_detector_loop
@@ -55,6 +60,9 @@ async def lifespan(app: FastAPI):
     bot_scheduler.start()
     yield
     logger.info("Đang tắt dịch vụ DOMINUS Investor...")
+
+    from src.data_pipeline.whale_order_storage import whale_order_storage
+    await whale_order_storage.stop_worker()
     
     from src.tcbs.socket_manager import socket_manager
     await socket_manager.stop_all()

@@ -9,7 +9,7 @@ logger = logging.getLogger("dominus-investor.data_pipeline.foreign_order_detecto
 
 VN_TZ = timezone(timedelta(hours=7))  # Mui gio Viet Nam UTC+7
 CLUSTER_WINDOW_SECONDS = 120.0       # Cua so 120 giay de gom lenh nho lien tiep
-CLUSTER_MIN_VALUE_VND = 300_000_000   # Nguong 300 trieu VND de bao dong cum ca map gom tang hinh
+CLUSTER_MIN_VALUE_VND = 50_000_000    # Nguong 50 trieu VND de hien thi cum gom lenh nho ngoai tang hinh
 
 class ForeignOrderDetector:
     """
@@ -90,7 +90,7 @@ class ForeignOrderDetector:
             "time": now
         }
 
-        # 1. Phat hien lenh Ngoai Mua
+        # 1. Phat hien lenh Ngoai Mua (Luu toan bo khong ap nguong)
         if delta_buy > 0:
             val_vnd = delta_buy * price
             order_info = {
@@ -103,13 +103,21 @@ class ForeignOrderDetector:
                 "side": "BUY",
                 "sector": get_sector_by_symbol(sym),
                 "is_foreign": True,
+                "tier": "FOREIGN",
                 "room_left": f_room
             }
+            # Luu vao CSDL khong can nguong loc de cong don dau vet
+            try:
+                from src.data_pipeline.whale_order_storage import whale_order_storage
+                whale_order_storage.enqueue(order_info)
+            except Exception:
+                pass
+
             cluster = self._add_to_cluster(order_info, now)
             if cluster:
                 detected_orders.append(cluster)
 
-        # 2. Phat hien lenh Ngoai Ban
+        # 2. Phat hien lenh Ngoai Ban (Luu toan bo khong ap nguong)
         if delta_sell > 0:
             val_vnd = delta_sell * price
             order_info = {
@@ -122,8 +130,16 @@ class ForeignOrderDetector:
                 "side": "SELL",
                 "sector": get_sector_by_symbol(sym),
                 "is_foreign": True,
+                "tier": "FOREIGN",
                 "room_left": f_room
             }
+            # Luu vao CSDL khong can nguong loc de cong don dau vet
+            try:
+                from src.data_pipeline.whale_order_storage import whale_order_storage
+                whale_order_storage.enqueue(order_info)
+            except Exception:
+                pass
+
             cluster = self._add_to_cluster(order_info, now)
             if cluster:
                 detected_orders.append(cluster)
