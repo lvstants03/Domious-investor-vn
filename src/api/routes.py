@@ -1661,4 +1661,27 @@ async def get_stock_trade_plan(symbol: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/api/paper-portfolio/overview")
+async def get_paper_portfolio_overview():
+    """Lay toan bo danh muc dau tu gia lap va cac vi the dang gong lai >= 10%"""
+    try:
+        from src.engine.smart_paper_portfolio import smart_paper_portfolio
+        return await smart_paper_portfolio.get_portfolio_summary()
+    except Exception as e:
+        logger.error("Loi khi lay paper portfolio overview: %s", str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/paper-portfolio/reset")
+async def reset_paper_portfolio():
+    """Reset danh muc gia lap ve so von 1 Ty ban dau"""
+    try:
+        from src.engine.smart_paper_portfolio import smart_paper_portfolio
+        return await smart_paper_portfolio.reset_portfolio()
+    except Exception as e:
+        logger.error("Loi khi reset paper portfolio: %s", str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
 
