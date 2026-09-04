@@ -208,6 +208,8 @@ class BigOrderTracker:
             "is_foreign": True,
             "is_foreign_cluster": True,
             "order_count": cluster.get("order_count", 1),
+            "room_left": cluster.get("room_left", 0.0),
+            "room_val_ty": cluster.get("room_val_ty", 0.0),
             "cluster_note": cluster.get("cluster_note", "")
         }
         self.recent_orders.appendleft(order)

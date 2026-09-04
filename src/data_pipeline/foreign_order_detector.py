@@ -1,11 +1,13 @@
 import time
 import logging
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List, Optional
 from collections import defaultdict
 from src.data_pipeline.sector_map import get_sector_by_symbol
 
 logger = logging.getLogger("dominus-investor.data_pipeline.foreign_order_detector")
 
+VN_TZ = timezone(timedelta(hours=7))  # Mui gio Viet Nam UTC+7
 CLUSTER_WINDOW_SECONDS = 120.0       # Cua so 120 giay de gom lenh nho lien tiep
 CLUSTER_MIN_VALUE_VND = 300_000_000   # Nguong 300 trieu VND de bao dong cum ca map gom tang hinh
 
@@ -59,9 +61,10 @@ class ForeignOrderDetector:
 
         f_buy_qtty = float(item.get("buyForeignQtty") or 0.0)
         f_sell_qtty = float(item.get("sellForeignQtty") or 0.0)
+        f_room = max(0.0, float(item.get("room") or item.get("foreign_room_left") or 0.0))
 
         now = time.time()
-        time_str = time.strftime("%H:%M:%S")
+        time_str = datetime.now(VN_TZ).strftime("%H:%M:%S")
 
         detected_orders: List[Dict[str, Any]] = []
 
@@ -70,6 +73,7 @@ class ForeignOrderDetector:
             self._last_snaps[sym] = {
                 "buy_qtty": f_buy_qtty,
                 "sell_qtty": f_sell_qtty,
+                "room_left": f_room,
                 "time": now
             }
             return []
@@ -82,6 +86,7 @@ class ForeignOrderDetector:
         self._last_snaps[sym] = {
             "buy_qtty": f_buy_qtty,
             "sell_qtty": f_sell_qtty,
+            "room_left": f_room,
             "time": now
         }
 
@@ -97,7 +102,8 @@ class ForeignOrderDetector:
                 "value_ty": round(val_vnd / 1e9, 3),
                 "side": "BUY",
                 "sector": get_sector_by_symbol(sym),
-                "is_foreign": True
+                "is_foreign": True,
+                "room_left": f_room
             }
             cluster = self._add_to_cluster(order_info, now)
             if cluster:
@@ -115,7 +121,8 @@ class ForeignOrderDetector:
                 "value_ty": round(val_vnd / 1e9, 3),
                 "side": "SELL",
                 "sector": get_sector_by_symbol(sym),
-                "is_foreign": True
+                "is_foreign": True,
+                "room_left": f_room
             }
             cluster = self._add_to_cluster(order_info, now)
             if cluster:
@@ -130,6 +137,7 @@ class ForeignOrderDetector:
         """
         key = f"{order['symbol']}_{order['side']}"
         cluster = self._active_clusters.get(key)
+        room_left = order.get("room_left", 0.0)
 
         if not cluster or (current_time - cluster["last_order_time"]) > CLUSTER_WINDOW_SECONDS:
             # Tao cum gom moi
@@ -145,7 +153,8 @@ class ForeignOrderDetector:
                 "total_val": order["value"],
                 "weighted_price_sum": order["price"] * order["qty"],
                 "is_foreign_cluster": True,
-                "is_foreign": True
+                "is_foreign": True,
+                "room_left": room_left
             }
             self._active_clusters[key] = cluster
         else:
@@ -155,10 +164,13 @@ class ForeignOrderDetector:
             cluster["total_val"] += order["value"]
             cluster["weighted_price_sum"] += order["price"] * order["qty"]
             cluster["last_order_time"] = current_time
+            cluster["room_left"] = room_left
 
         # Tinh toan gia trung binh va gia tri ty
         avg_price = round(cluster["weighted_price_sum"] / cluster["total_qty"]) if cluster["total_qty"] > 0 else order["price"]
         val_ty = round(cluster["total_val"] / 1e9, 2)
+        f_room = cluster.get("room_left", 0.0)
+        room_val_ty = round((f_room * avg_price) / 1e9, 1)
 
         # Neu tong gia tri cum dat nguong >= 300 trieu VND, tra ve de hien thi
         if cluster["total_val"] >= CLUSTER_MIN_VALUE_VND:
@@ -174,6 +186,8 @@ class ForeignOrderDetector:
                 "is_foreign_cluster": True,
                 "is_foreign": True,
                 "order_count": cluster["order_count"],
+                "room_left": f_room,
+                "room_val_ty": room_val_ty,
                 "cluster_note": f"Khoi ngoai gom tang hinh: {cluster['order_count']} lenh nho = {val_ty:.1f} Ty"
             }
             return formatted_cluster
