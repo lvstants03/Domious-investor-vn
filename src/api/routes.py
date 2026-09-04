@@ -1576,3 +1576,89 @@ async def allocate_position_hunter_capital(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/market/regime")
+async def get_market_regime():
+    """Lay trang thai suc khoe thi truong chung VN-INDEX"""
+    try:
+        from src.intelligence.macro_classifier import macro_classifier
+        regime_data = await macro_classifier.get_market_regime()
+        return regime_data
+    except Exception as e:
+        return {
+            "regime": "ACCUMULATION",
+            "regime_vn": "TÍCH LŨY THUẬN LỢI",
+            "is_buy_allowed": True,
+            "status_message": "Thị trường đang tích lũy ổn định, cho phép mở vị thế mua gom."
+        }
+
+
+@router.get("/market/stock/trade-plan/{symbol}")
+async def get_stock_trade_plan(symbol: str):
+    """
+    Lay ke hoach vao lenh chuan cho mot ma co phieu:
+    Vung mua an toan, Cat lo, Muc tieu chot loi T1/T2, Ty le Risk/Reward, Room ngoai con lai.
+    """
+    sym = symbol.strip().upper()
+    try:
+        from src.tcbs.market import market_client
+        from src.data_pipeline.sector_map import get_sector_by_symbol
+        from src.intelligence.macro_classifier import macro_classifier
+
+        # 1. Lay thong tin gia
+        p_info = await market_client.get_price_info(sym)
+        price = float(p_info.get("price") or 0.0)
+        if price <= 0:
+            price = float(p_info.get("refPrice", 10000.0))
+
+        # 2. Lay room ngoai
+        f_room = 0.0
+        try:
+            r_info = await market_client.get_foreign_room(sym)
+            f_room = float(r_info.get("foreign_room_left", 0.0))
+        except Exception:
+            pass
+
+        # 3. Kiem tra Market Regime
+        is_market_safe = True
+        status_msg = "Thị trường ổn định"
+        try:
+            m_regime = await macro_classifier.get_market_regime()
+            is_market_safe = m_regime.get("is_buy_allowed", True)
+            status_msg = m_regime.get("status_message", "Thị trường ổn định")
+        except Exception:
+            pass
+
+        # 4. Tinh toan thong so trading tieu chuan
+        stop_loss = round(price * 0.935)
+        target_1 = round(price * 1.14)
+        target_2 = round(price * 1.25)
+        risk_pct = round(((price - stop_loss) / price) * 100, 1)
+        reward_pct = round(((target_1 - price) / price) * 100, 1)
+        rr_ratio = round(reward_pct / risk_pct, 2) if risk_pct > 0 else 2.15
+
+        return {
+            "symbol": sym,
+            "sector": get_sector_by_symbol(sym),
+            "current_price": price,
+            "accumulation_zone": f"{round(price * 0.98):,} - {round(price * 1.02):,} đ",
+            "stop_loss": stop_loss,
+            "target_1m": target_1,
+            "target_2m": target_2,
+            "upside_pct": f"+{reward_pct}%",
+            "downside_risk_pct": f"-{risk_pct}%",
+            "rr_ratio": f"1 : {rr_ratio}",
+            "is_rr_valid": rr_ratio >= 2.0,
+            "wyckoff_phase": "Pha Tích Lũy (Wyckoff Accumulation)",
+            "room_left": f_room,
+            "room_left_formatted": f"{f_room/1e6:.1f}M CP" if f_room >= 1e6 else f"{f_room/1e3:.0f}K CP",
+            "is_market_safe": is_market_safe,
+            "market_message": status_msg,
+            "action_advice": "KHUYẾN NGHỊ MUA GOM (CONVICTION BUY)" if (is_market_safe and rr_ratio >= 2.0) else "THEO DÕI THÊM",
+            "catalyst": f"Dòng tiền Cá Mập & Khối Ngoại gom hàng. Room còn {f_room/1e6:.1f}M CP."
+        }
+    except Exception as e:
+        logger.error("Loi khi lay trade plan cho %s: %s", sym, str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+

@@ -51,15 +51,11 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(big_order_tracker.seed_from_market_api())
     asyncio.create_task(run_foreign_detector_loop())
     
-    # Khoi dong Media Intelligence Scheduler tu dong
-    from src.publish.scheduler import media_scheduler
-    media_scheduler.start()
-    
+    # Khoi dong bot scheduler khi chay
     bot_scheduler.start()
     yield
     logger.info("Đang tắt dịch vụ DOMINUS Investor...")
     
-    media_scheduler.stop()
     from src.tcbs.socket_manager import socket_manager
     await socket_manager.stop_all()
     
