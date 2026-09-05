@@ -1686,5 +1686,68 @@ async def reset_paper_portfolio():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/api/intelligence/firecrawl/scrape")
+async def scrape_with_firecrawl(request: Request):
+    """
+    Endpoint cao du lieu sau bang Firecrawl (BCTC, Thuyet minh, Nghi quyet DHCD, Dau thau).
+    Body: { "url": "https://..." }
+    """
+    try:
+        body = await request.json()
+        url = body.get("url", "")
+        if not url:
+            raise HTTPException(status_code=400, detail="Trường 'url' là bắt buộc")
+
+        from src.intelligence.firecrawl_agent import firecrawl_agent, FirecrawlValidationError
+        try:
+            result = await firecrawl_agent.scrape_url(url=url)
+            return result
+        except FirecrawlValidationError as ve:
+            raise HTTPException(status_code=400, detail=str(ve))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Loi khi cao Firecrawl: %s", str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/intelligence/firecrawl/extract-catalyst")
+async def extract_catalyst_with_alpha(request: Request):
+    """
+    Trich xuat chat xuc tac va Cross-Validation voi Dong tien Ca Map de toi uu Win Rate.
+    Body: { "symbol": "HPG", "text": "...", "shark_net_ty": 5.2, "foreign_net_ty": 1.0 }
+    """
+    try:
+        body = await request.json()
+        symbol = body.get("symbol", "").strip().upper()
+        text = body.get("text", "")
+        shark_net_ty = float(body.get("shark_net_ty", 0.0))
+        foreign_net_ty = float(body.get("foreign_net_ty", 0.0))
+
+        if not symbol:
+            raise HTTPException(status_code=400, detail="Trường 'symbol' là bắt buộc")
+
+        from src.intelligence.firecrawl_agent import firecrawl_agent
+        catalyst = await firecrawl_agent.extract_catalyst_signals(symbol=symbol, text_content=text)
+        alpha_validation = firecrawl_agent.cross_validate_with_whale(
+            symbol=symbol,
+            catalyst_score=catalyst.get("catalyst_score", 5.0),
+            shark_net_ty=shark_net_ty,
+            foreign_net_ty=foreign_net_ty
+        )
+
+        return {
+            "symbol": symbol,
+            "catalyst": catalyst,
+            "alpha_validation": alpha_validation
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Loi khi trich xuat catalyst: %s", str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
 
 

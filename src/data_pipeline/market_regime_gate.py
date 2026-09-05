@@ -23,7 +23,7 @@ class MarketRegimeGate:
     def __init__(self):
         self._cache_data: Optional[Dict[str, Any]] = None
         self._cache_time: float = 0
-        self._cache_ttl: float = 30.0
+        self._cache_ttl: float = 180.0  # 3 phut
 
     async def get_market_regime(self) -> Dict[str, Any]:
         """
@@ -37,9 +37,22 @@ class MarketRegimeGate:
             end_date = date.today().strftime("%Y-%m-%d")
             start_date = (date.today() - timedelta(days=150)).strftime("%Y-%m-%d")
             
-            df = await ohlcv_fetcher.fetch_history("VNINDEX", start_date, end_date)
+            try:
+                df = await asyncio.wait_for(
+                    ohlcv_fetcher.fetch_history("VNINDEX", start_date, end_date),
+                    timeout=3.5
+                )
+            except (asyncio.TimeoutError, Exception):
+                df = None
+
             if df is None or len(df) < 30:
-                df = await ohlcv_fetcher.fetch_history("VN30", start_date, end_date)
+                try:
+                    df = await asyncio.wait_for(
+                        ohlcv_fetcher.fetch_history("VN30", start_date, end_date),
+                        timeout=2.0
+                    )
+                except (asyncio.TimeoutError, Exception):
+                    df = None
 
             if df is None or len(df) < 30:
                 res = {

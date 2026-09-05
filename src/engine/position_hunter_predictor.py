@@ -90,21 +90,19 @@ class PositionHunterPredictor:
     """
 
     def __init__(self):
-        self._result_cache: Optional[Dict[str, Any]] = None
-        self._result_cache_time: float = 0
-        self._cache_ttl: float = 60.0  # 60 giay
+        self._basket_cache: Dict[str, Dict[str, Any]] = {}
+        self._cache_times: Dict[str, float] = {}
+        self._cache_ttl: float = 120.0  # 120 giay (2 phut)
 
     async def scan_medium_term_opportunities(self, basket: str = "ALL") -> Dict[str, Any]:
         """
         Quet toan bo Universe co phieu theo ro chon loc.
         """
         now = time.time()
-        if (
-            self._result_cache is not None
-            and (now - self._result_cache_time) < self._cache_ttl
-            and self._result_cache.get("_basket_key") == basket
-        ):
-            return self._result_cache
+        cached_data = self._basket_cache.get(basket)
+        cached_time = self._cache_times.get(basket, 0)
+        if cached_data is not None and (now - cached_time) < self._cache_ttl:
+            return cached_data
 
         # 1. LAYER 0: MACRO GATE
         market_regime = await market_regime_gate.get_market_regime()
@@ -436,8 +434,8 @@ class PositionHunterPredictor:
             }
         }
 
-        self._result_cache = result
-        self._result_cache_time = time.time()
+        self._basket_cache[basket] = result
+        self._cache_times[basket] = time.time()
         return result
 
     async def allocate_capital(
