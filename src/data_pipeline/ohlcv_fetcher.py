@@ -25,7 +25,13 @@ class OHLCVFetcher:
         try:
             # vnstock v4: su dung Quote API moi, source ho tro: KBS, VCI, MSN, FMP
             from vnstock.api.quote import Quote
-            q = Quote(symbol=symbol, source="VCI")
+            try:
+                q = Quote(symbol=symbol, source="VCI")
+            except TypeError:
+                try:
+                    q = Quote(source="VCI", symbol=symbol)
+                except TypeError:
+                    q = Quote(symbol)
             df = q.history(start=start_date, end=end_date, interval="1D")
             if df is None or df.empty:
                 logger.warning("Khong co du lieu OHLCV cho ma %s tu %s den %s", symbol, start_date, end_date)

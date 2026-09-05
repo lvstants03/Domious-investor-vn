@@ -28,15 +28,19 @@ class MarketUniverseScanner:
         """
         import time
         now = time.time()
-        if self._universe_cache and (now - self._last_scan_time) < 30:
+        if self._universe_cache and (now - self._last_scan_time) < 120.0:
             return self._universe_cache
 
         discovered: List[Dict[str, Any]] = []
 
         try:
+            import asyncio
             for index_id in [1, 3, 5]:
                 try:
-                    snaps = await market_client.get_ticker_snaps(index=index_id)
+                    snaps = await asyncio.wait_for(
+                        market_client.get_ticker_snaps(index=index_id),
+                        timeout=2.5
+                    )
                     if not snaps or not isinstance(snaps, list):
                         continue
 

@@ -40,7 +40,7 @@ class MarketRegimeGate:
             try:
                 df = await asyncio.wait_for(
                     ohlcv_fetcher.fetch_history("VNINDEX", start_date, end_date),
-                    timeout=3.5
+                    timeout=1.5
                 )
             except (asyncio.TimeoutError, Exception):
                 df = None
@@ -49,7 +49,7 @@ class MarketRegimeGate:
                 try:
                     df = await asyncio.wait_for(
                         ohlcv_fetcher.fetch_history("VN30", start_date, end_date),
-                        timeout=2.0
+                        timeout=1.0
                     )
                 except (asyncio.TimeoutError, Exception):
                     df = None
