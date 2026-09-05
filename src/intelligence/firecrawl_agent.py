@@ -238,4 +238,157 @@ class FirecrawlAgent:
                 "expected_wr_pct": 48.0
             }
 
+    async def search_catalysts(self, query: str, limit: int = 5, timeout_seconds: float = 15.0) -> Dict[str, Any]:
+        """
+        Goi Firecrawl /v1/search de tim kiem thong minh passages, tin tuc chat xuc tac va link PDF BCTC.
+        """
+        if not query or not query.strip():
+            raise FirecrawlValidationError("Tu khoa tim kiem khong duoc de trong")
+
+        if not self.is_configured():
+            return {
+                "success": False,
+                "status": "UNCONFIGURED_API_KEY",
+                "query": query,
+                "results": []
+            }
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "query": query.strip(),
+            "limit": min(10, max(1, limit)),
+            "scrapeOptions": {
+                "formats": ["markdown"]
+            }
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+                resp = await client.post(
+                    f"{self.base_url}/search",
+                    json=payload,
+                    headers=headers
+                )
+                if resp.status_code == 200:
+                    return resp.json()
+                else:
+                    logger.error("Loi khi goi Firecrawl search: %d - %s", resp.status_code, resp.text)
+                    return {"success": False, "status_code": resp.status_code, "results": []}
+        except Exception as e:
+            logger.error("Loi ngoai le Firecrawl search: %s", str(e))
+            return {"success": False, "error": str(e), "results": []}
+
+    async def parse_pdf_document(self, file_url: str, timeout_seconds: float = 30.0) -> Dict[str, Any]:
+        """
+        Goi Firecrawl /v1/parse de boc tach truc tiep file PDF BCTC thanh bang bieu Markdown & JSON.
+        """
+        self.validate_url(file_url)
+        if not self.is_configured():
+            return {
+                "success": False,
+                "status": "UNCONFIGURED_API_KEY",
+                "markdown": f"# Mau boc tach PDF cho {file_url}\nVui long nhap FIRECRAWL_API_KEY de chay thuc te."
+            }
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "url": file_url.strip(),
+            "formats": ["markdown"]
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+                # Thu goi /parse hoac fallback /scrape
+                resp = await client.post(f"{self.base_url}/parse", json=payload, headers=headers)
+                if resp.status_code == 200:
+                    return resp.json()
+                elif resp.status_code == 404:
+                    # Firecrawl v1 ho tro scrape PDF truc tiep
+                    resp_scrape = await client.post(f"{self.base_url}/scrape", json=payload, headers=headers)
+                    if resp_scrape.status_code == 200:
+                        return resp_scrape.json()
+                return {"success": False, "status_code": resp.status_code, "error": resp.text}
+        except Exception as e:
+            logger.error("Loi ngoai le khi parse PDF qua Firecrawl: %s", str(e))
+            return {"success": False, "error": str(e)}
+
+    async def auto_analyze_symbol_bctc(
+        self,
+        symbol: str,
+        shark_net_ty: float = 0.0,
+        foreign_net_ty: float = 0.0
+    ) -> Dict[str, Any]:
+        """
+        QUY TRINH ZERO-CLICK HOAN TOAN TU DONG:
+        1. Tu tim kiem link BCTC / Thuyet minh PDF tren CafeF, Vietstock, IR
+        2. Tu cao va boc tach bang bieu qua Firecrawl
+        3. Trich xuat cac chi tieu Thuyet minh vang (Nguoi mua tra tien truoc, Do dang nha may, Ton kho)
+        4. Cross-Validation voi Dong tien Ca Map de danh gia Win Rate
+        """
+        sym = symbol.strip().upper()
+        now = time.time()
+        cache_key = f"auto_bctc_{sym}"
+
+        if cache_key in self._cache_scrapes:
+            cached = self._cache_scrapes[cache_key]
+            if (now - cached.get("_cached_at", 0)) < 7200.0:  # Cache 2 gio
+                return cached.get("data", {})
+
+        # Buoc 1: Tu tim kiem BCTC tren mang
+        search_query = f'Bao cao tai chinh {sym} quy moi nhat site:cafef.vn OR site:vietstock.vn'
+        search_res = await self.search_catalysts(query=search_query, limit=3)
+        found_results = search_res.get("data", []) or search_res.get("results", [])
+
+        extracted_text = ""
+        source_url = ""
+
+        if found_results and isinstance(found_results, list):
+            first_hit = found_results[0]
+            extracted_text = first_hit.get("markdown", "") or first_hit.get("description", "")
+            source_url = first_hit.get("url", "")
+
+        # Fallback: Neu chua tim thay, cao truc tiep trang BCTC tong quan tren CafeF
+        if not extracted_text:
+            source_url = f"https://s.cafef.vn/bao-cao-tai-chinh/{sym}/IncSta/2024/4/0/0/bao-cao-tai-chinh-.chn"
+            scrape_res = await self.scrape_url(source_url)
+            extracted_text = (scrape_res.get("data", {}) or {}).get("markdown", "")
+
+        # Buoc 2: Trich xuat cac chi tieu Thuyet minh BCTC quan trong
+        catalyst = await self.extract_catalyst_signals(symbol=sym, text_content=extracted_text)
+
+        # Buoc 3: Cross-Validation voi Shark Tracker
+        alpha_eval = self.cross_validate_with_whale(
+            symbol=sym,
+            catalyst_score=catalyst.get("catalyst_score", 5.5),
+            shark_net_ty=shark_net_ty,
+            foreign_net_ty=foreign_net_ty
+        )
+
+        result_payload = {
+            "symbol": sym,
+            "source_url": source_url,
+            "has_live_data": bool(extracted_text),
+            "catalyst": catalyst,
+            "alpha_validation": alpha_eval,
+            "key_highlights": [
+                f"Cap nhat BCTC moi nhat cua {sym} tu nguon tin cay.",
+                f"Chat xuc tac dat {catalyst.get('catalyst_score')}/10 diem.",
+                alpha_eval.get("recommendation") or alpha_eval.get("warning") or "Tin hieu on dinh."
+            ],
+            "analyzed_at": time.strftime("%H:%M:%S %d/%m/%Y")
+        }
+
+        self._cache_scrapes[cache_key] = {
+            "data": result_payload,
+            "_cached_at": now
+        }
+        return result_payload
+
 firecrawl_agent = FirecrawlAgent()
+

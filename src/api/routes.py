@@ -1748,6 +1748,80 @@ async def extract_catalyst_with_alpha(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/api/intelligence/firecrawl/auto-analyze-bctc")
+async def auto_analyze_bctc(request: Request):
+    """
+    Quy trinh Zero-Click: Tu dong quet BCTC, Thuyet minh, va Cross-Validation theo ma co phieu.
+    Body: { "symbol": "HPG", "shark_net_ty": 5.0, "foreign_net_ty": 1.5 }
+    """
+    try:
+        body = await request.json()
+        symbol = body.get("symbol", "").strip().upper()
+        if not symbol:
+            raise HTTPException(status_code=400, detail="Trường 'symbol' là bắt buộc")
+
+        shark_net_ty = float(body.get("shark_net_ty", 0.0))
+        foreign_net_ty = float(body.get("foreign_net_ty", 0.0))
+
+        from src.intelligence.firecrawl_agent import firecrawl_agent
+        result = await firecrawl_agent.auto_analyze_symbol_bctc(
+            symbol=symbol,
+            shark_net_ty=shark_net_ty,
+            foreign_net_ty=foreign_net_ty
+        )
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Loi khi auto analyze BCTC: %s", str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/intelligence/firecrawl/search")
+async def search_firecrawl(request: Request):
+    """
+    Tim kiem thong minh passages va chat xuc tac tren web bang Firecrawl v2.
+    Body: { "query": "HPG Dung Quat 2", "limit": 5 }
+    """
+    try:
+        body = await request.json()
+        query = body.get("query", "").strip()
+        limit = int(body.get("limit", 5))
+
+        if not query:
+            raise HTTPException(status_code=400, detail="Trường 'query' là bắt buộc")
+
+        from src.intelligence.firecrawl_agent import firecrawl_agent
+        return await firecrawl_agent.search_catalysts(query=query, limit=limit)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Loi khi search Firecrawl: %s", str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/intelligence/firecrawl/parse-pdf")
+async def parse_pdf_bctc(request: Request):
+    """
+    Boc tach truc tiep file PDF BCTC qua Firecrawl v2.
+    Body: { "file_url": "https://...bctc.pdf" }
+    """
+    try:
+        body = await request.json()
+        file_url = body.get("file_url", "").strip()
+        if not file_url:
+            raise HTTPException(status_code=400, detail="Trường 'file_url' là bắt buộc")
+
+        from src.intelligence.firecrawl_agent import firecrawl_agent
+        return await firecrawl_agent.parse_pdf_document(file_url=file_url)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Loi khi parse PDF Firecrawl: %s", str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
 
 
 
