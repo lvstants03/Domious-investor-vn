@@ -27,6 +27,9 @@ class ScannerScorer:
             # 2. Tinh diem Technical (Trong so 0.3)
             tech_score = self.technical_criterion.evaluate(symbol, data)
             
+            # FIX: lay foreign_info tu data dict dung scope
+            foreign_info = data.get("foreign_info", {}) if isinstance(data, dict) else {}
+
             # 3. Diem Momentum/Trend (Trong so 0.2)
             # Diem co ban
             wyckoff_score = 60.0
@@ -46,13 +49,14 @@ class ScannerScorer:
                     pass
 
             inst_score = 50.0
-            net_buy_val = foreign_info.get("net_buy_value", 0.0)
+            net_buy_val = float(foreign_info.get("net_buy_value", 0.0))
             if net_buy_val > 5000000000:
                 inst_score = 85.0
             elif net_buy_val > 1000000000:
                 inst_score = 70.0
             elif net_buy_val < -5000000000:
                 inst_score = 20.0
+
 
             # 4. Tinh Confidence Score moi: (0.4 * Wyckoff_Base_Score) + (0.3 * Volume_ZScore) + (0.2 * Institutional_Flow_Score) + (0.1 * Sentiment_Score)
             sentiment_score = 50.0

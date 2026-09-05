@@ -267,6 +267,10 @@ class PaperTrade(Base):
     status: Mapped[str] = mapped_column(String(20), default="OPEN")  # OPEN, CLOSED_WIN, CLOSED_LOSS, CLOSED_EXPIRED
     pnl_pct: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     exit_reason: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    # Trailing Stop (quan ly boi TrailingStopManager backend)
+    highest_price: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    trailing_stop_pct: Mapped[float] = mapped_column(Float, default=10.0)
+    trailing_stop_price: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 

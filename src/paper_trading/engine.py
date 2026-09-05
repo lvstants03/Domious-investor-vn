@@ -5,6 +5,8 @@ import pandas as pd
 import numpy as np
 
 from src.database.models import WyckoffSignal, PaperTrade, OHLCVDaily
+from src.data_pipeline.sector_flow_calculator import sector_calculator
+from src.paper_trading.sector_exposure import sector_exposure_guard
 
 logger = logging.getLogger("dominus-investor.paper_trading.engine")
 
@@ -23,30 +25,48 @@ class PaperTradingEngine:
     - Lenh het han sau 30 phien neu chua cham Target hoac StopLoss
     """
 
-    MAX_HOLDING_DAYS = 30
+    # Vi the nam giu theo quy: 1 - 3 thang (~60 phien)
+    MAX_HOLDING_DAYS = 60
 
-    def create_paper_trade_from_signal(self, signal: WyckoffSignal) -> Optional[dict]:
+    async def create_paper_trade_from_signal(
+        self, signal: WyckoffSignal, db_session=None
+    ) -> Optional[dict]:
         """
-        Tao lenh gia lap tu WyckoffSignal.
+        Tao lenh gia lap tu WyckoffSignal cho vi the quy (1-3 thang).
         Tra ve dict du lieu de luu vao DB, hoac None neu tin hieu khong du tieu chuan.
+        
+        Kiem tra:
+        1. R/R >= 2.5 (chuan vi the quy)
+        2. Sector Exposure <= 40% NAV (SectorExposureGuard)
         """
         if signal is None:
             return None
 
-        # Chi tao lenh neu R/R >= 2.0
-        if (signal.rr_ratio or 0) < 2.0:
-            logger.info("Bo qua tin hieu %s - R/R = %.2f < 2.0", signal.symbol, signal.rr_ratio or 0)
+        # Chi tao lenh neu R/R >= 2.5
+        if (signal.rr_ratio or 0) < 2.5:
+            logger.info("Bo qua tin hieu %s - R/R = %.2f < 2.5", signal.symbol, signal.rr_ratio or 0)
             return None
 
         entry_price = signal.entry_standard or signal.entry_aggressive
         if not entry_price or entry_price <= 0:
             return None
 
-        stop_loss = signal.stop_loss or (entry_price * 0.93)
-        target_price = signal.target_price or (entry_price * 1.15)
+        # Kiem tra Sector Exposure truoc khi mo lenh
+        sector = sector_calculator.get_sector_for_symbol(signal.symbol)
+        # Vi the quy: Cat lo theo cau truc ~9%, muc tieu song quy +30%
+        stop_loss = signal.stop_loss or (entry_price * 0.91)
+        target_price = signal.target_price or (entry_price * 1.30)
 
         quantity = int(PAPER_BUDGET_PER_TRADE / entry_price / 100) * 100
         if quantity <= 0:
+            return None
+
+        proposed_value = entry_price * quantity
+        can_open, reason = await sector_exposure_guard.can_open_position(
+            signal.symbol, sector, proposed_value, db_session
+        )
+        if not can_open:
+            logger.info("[SectorGuard] Bo qua %s: %s", signal.symbol, reason)
             return None
 
         return {
@@ -57,7 +77,8 @@ class PaperTradingEngine:
             "quantity": quantity,
             "stop_loss": stop_loss * (1 - PAPER_STOP_LOSS_BUFFER),
             "target_price": target_price,
-            "status": "OPEN"
+            "status": "OPEN",
+            "trailing_stop_pct": 12.0,   # Trailing 12% tu dinh phu hop song quy
         }
 
     def update_paper_trades(

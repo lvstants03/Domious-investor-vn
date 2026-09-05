@@ -6,6 +6,7 @@ from src.data_pipeline.market_universe_scanner import universe_scanner
 from src.data_pipeline.big_order_tracker import big_order_tracker
 from src.data_pipeline.market_regime_gate import market_regime_gate
 from src.data_pipeline.sector_flow_calculator import sector_calculator
+from src.data_pipeline.ohlcv_cache import ohlcv_cache
 from src.intelligence.news_catalyst_booster import news_catalyst_booster
 from src.intelligence.signal_logger import signal_logger
 
@@ -183,30 +184,60 @@ class PositionHunterPredictor:
             foreign_stat = stat.get("foreign", {})
             foreign_net_val = float(foreign_stat.get("net_val", 0.0)) if isinstance(foreign_stat, dict) else 0.0
 
-            # Tinh toan bien do gia dong cho tung ma (tranh trung lap gia tri)
-            sym_seed = sum(ord(c) for c in sym) % 15
-            acc_low = round((last_price * (0.97 - (sym_seed % 5) * 0.005)) / 100) * 100
-            acc_high = round((last_price * (1.02 + (sym_seed % 4) * 0.006)) / 100) * 100
-            estimated_avg_vol = max(100000, int(vol * (0.8 + (sym_seed % 6) * 0.07)))
+            # --- DU LIEU THUC TU OHLCV CACHE (thay the sym_seed gia) ---
+            real_52w_high = ohlcv_cache.get_52w_high(sym)
+            if real_52w_high and real_52w_high > 0 and last_price > 0:
+                dist_52w_pct = abs((last_price - real_52w_high) / real_52w_high * 100)
+            else:
+                # Conservative fallback: coi la xa dinh 30% -> diem 52W thap
+                dist_52w_pct = 30.0
+
+            real_base_weeks, real_close_above_zone = ohlcv_cache.get_base_info(sym)
+            base_weeks = real_base_weeks          # 0.0 neu khong co nen
+            close_above_zone = real_close_above_zone
+
+            # Vung tich luy: lay tu BaseDetector neu co, fallback theo % bien dong
+            if real_base_weeks > 0:
+                # Co nen thuc: dung support/resistance tu base_detector
+                df_sym = ohlcv_cache.get_ohlcv_df(sym)
+                try:
+                    from src.wyckoff.base_detector import base_detector as _bd
+                    _base = _bd.detect_base(df_sym, lookback=60) if df_sym is not None else None
+                    if _base:
+                        acc_low = round(_base.support_level / 100) * 100
+                        acc_high = round(_base.resistance_level / 100) * 100
+                    else:
+                        acc_low = round((last_price * 0.95) / 100) * 100
+                        acc_high = round((last_price * 1.05) / 100) * 100
+                except Exception:
+                    acc_low = round((last_price * 0.95) / 100) * 100
+                    acc_high = round((last_price * 1.05) / 100) * 100
+            else:
+                acc_low = round((last_price * 0.95) / 100) * 100
+                acc_high = round((last_price * 1.05) / 100) * 100
+
+            # Volume so sanh voi MA20 thuc te
+            df_sym_vol = ohlcv_cache.get_ohlcv_df(sym)
+            if df_sym_vol is not None and len(df_sym_vol) >= 20:
+                ma20_vol = float(df_sym_vol["volume"].tail(20).mean())
+                estimated_avg_vol = max(100000, int(ma20_vol))
+            else:
+                estimated_avg_vol = max(100000, int(vol * 0.8))
 
             target_1m = round((last_price * 1.18) / 100) * 100
             target_2m = round((last_price * 1.35) / 100) * 100
-            # Stop loss dong theo ATR ~ 5.5% - 7.5%
-            sl_pct = 0.055 + (sym_seed % 4) * 0.005
-            stop_loss = round((last_price * (1 - sl_pct)) / 100) * 100
+            # Stop loss co dinh 7% (ATR-based duoc xu ly o TrailingStopManager)
+            stop_loss = round((last_price * 0.93) / 100) * 100
 
             upside_pct_val = round(((target_2m - last_price) / last_price) * 100, 1)
             upside_pct = f"+{upside_pct_val}%"
 
             vol_spike_ratio = round(vol / estimated_avg_vol, 2) if estimated_avg_vol > 0 else 1.0
-            close_above_zone = last_price >= acc_low
+            # close_above_zone da duoc gan tu ohlcv_cache.get_base_info() o tren
 
             sec_key = sector_calculator.get_sector_for_symbol(sym)
-            sector_rs_rating = sector_rs_map.get(sec_key, 1.05) + ((sym_seed % 5) - 2) * 0.03
-
-            # Khoang cach 52W dinh tinh toan theo ma
-            dist_52w_pct = 6.0 + (sym_seed % 10) * 1.8
-            base_weeks = 6 + (sym_seed % 8)
+            # Sector RS rating: lay tu sector_flows thuc te, khong dung seed
+            sector_rs_rating = sector_rs_map.get(sec_key, 1.05)
 
             is_kiet_cung = vol_spike_ratio <= 0.8 and close_above_zone
             is_breakout = vol_spike_ratio >= 1.8 and close_above_zone
@@ -337,7 +368,7 @@ class PositionHunterPredictor:
                 "stop_loss": stop_loss,
                 "upside_pct": upside_pct,
                 "rr_ratio": "1 : 3.8",
-                "wyckoff_phase": f"Pha B (Tich Luy Gom - {base_weeks} tuan)",
+                "wyckoff_phase": f"Pha B (Tich Luy - {base_weeks:.1f} tuan thuc te)",
                 "base_weeks": base_weeks,
                 "shark_net_7d": f"{'+' if shark_net_val >= 0 else ''}{shark_net_val/1e9:.1f} Ty",
                 "foreign_net_7d": f"{'+' if foreign_net_val >= 0 else ''}{foreign_net_val/1e9:.1f} Ty",

@@ -38,3 +38,7 @@ logs/
 *.log
 *.db
 scratch/
+
+# Backtest data and trade logs
+backtest_*.json
+*_result.json

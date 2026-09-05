@@ -943,7 +943,10 @@ async def get_paper_trades(status: str = "OPEN", db: AsyncSession = Depends(get_
             "quantity": t.quantity,
             "stop_loss": t.stop_loss, "target_price": t.target_price,
             "status": t.status, "pnl_pct": t.pnl_pct,
-            "exit_reason": t.exit_reason
+            "exit_reason": t.exit_reason,
+            "highest_price": getattr(t, "highest_price", None),
+            "trailing_stop_pct": getattr(t, "trailing_stop_pct", 12.0),
+            "trailing_stop_price": getattr(t, "trailing_stop_price", None),
         }
         for t in trades
     ]

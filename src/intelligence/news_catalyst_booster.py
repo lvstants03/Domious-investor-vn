@@ -19,7 +19,8 @@ class NewsCatalystBooster:
         self._cache_news: List[Dict[str, Any]] = []
         self._cache_time: float = 0.0
         self._cache_ttl: float = 300.0  # 5 phut lam moi cache tin tuc
-        self.max_boost = getattr(settings, "NEWS_BOOST_MAX", 15.0)
+        # Giam tu 15 xuong 5: News chi la gia vi, khong phai mon chinh
+        self.max_boost = getattr(settings, "NEWS_BOOST_MAX", 5.0)
         self.impact_threshold = getattr(settings, "NEWS_IMPACT_THRESHOLD", 6.0)
 
     async def _refresh_cache_if_needed(self):
