@@ -1470,6 +1470,7 @@ async def get_whale_overview(
 
 
 @router.get("/market/foreign-flow/overview")
+@router.get("/market/foreign/flow-radar")
 async def get_foreign_flow_overview(
     timeframe: str = Query("1d"),
     symbol: Optional[str] = Query(None)
