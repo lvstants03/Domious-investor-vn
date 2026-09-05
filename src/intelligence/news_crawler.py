@@ -14,13 +14,13 @@ from src.database.models import NewsItem
 logger = logging.getLogger("dominus-investor.intelligence.news_crawler")
 
 RSS_FEEDS = [
-    {"source": "CafeF TTCK", "url": "https://cafef.vn/rss/thi-truong-chung-khoan.rss"},
-    {"source": "CafeF Vi Mo", "url": "https://cafef.vn/rss/kinh-te-vi-mo.rss"},
-    {"source": "VnEconomy", "url": "https://vneconomy.vn/chung-khoan.rss"},
-    {"source": "Vietstock", "url": "https://vietstock.vn/rss/thi-truong.rss"},
-    {"source": "Bao Dau Tu", "url": "https://baodautu.vn/chung-khoan.rss"},
-    {"source": "Tuoi Tre KT", "url": "https://tuoitre.vn/rss/kinh-te.rss"},
-    {"source": "Reuters Biz", "url": "https://feeds.reuters.com/reuters/businessNews"},
+    {"source": "VnEconomy CK", "url": "https://vneconomy.vn/chung-khoan.rss"},
+    {"source": "VnEconomy Thế Giới", "url": "https://vneconomy.vn/the-gioi.rss"},
+    {"source": "VnEconomy Tài Chính", "url": "https://vneconomy.vn/tai-chinh.rss"},
+    {"source": "VnExpress Kinh Doanh", "url": "https://vnexpress.net/rss/kinh-doanh.rss"},
+    {"source": "VnExpress Thế Giới", "url": "https://vnexpress.net/rss/the-gioi.rss"},
+    {"source": "CafeF Hàng Hóa", "url": "https://cafef.vn/hang-hoa-nguyen-lieu.rss"},
+    {"source": "Tuổi Trẻ Kinh Tế", "url": "https://tuoitre.vn/rss/kinh-te.rss"},
 ]
 
 class NewsCrawler:

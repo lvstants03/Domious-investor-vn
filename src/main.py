@@ -56,8 +56,14 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(big_order_tracker.seed_from_market_api())
     asyncio.create_task(run_foreign_detector_loop())
     
-    # Khoi dong bot scheduler khi chay
+    # Khoi dong bot scheduler va media crawler scheduler khi chay
     bot_scheduler.start()
+    
+    from src.publish.scheduler import media_scheduler
+    media_scheduler.start()
+    # Chay ngay 1 vong crawl va phan loai tin moi nhat o background khi khoi dong
+    asyncio.create_task(media_scheduler.job_crawl_and_classify())
+
     yield
     logger.info("Đang tắt dịch vụ DOMINUS Investor...")
 
@@ -68,6 +74,7 @@ async def lifespan(app: FastAPI):
     await socket_manager.stop_all()
     
     bot_scheduler.stop()
+    media_scheduler.stop()
     await discord_bot.stop()
 
 app = FastAPI(
