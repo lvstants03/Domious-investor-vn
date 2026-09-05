@@ -1,0 +1,48 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: dominus_investor_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres123}
+      POSTGRES_DB: ${POSTGRES_DB:-dominus_investor}
+    ports:
+      - "5432:5432"
+    volumes:
+      - dominus_investor_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-dominus_investor}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dominus_network
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dominus_investor_app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      # Ket noi den container db trong Docker network
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres123}@db:5432/${POSTGRES_DB:-dominus_investor}
+      - PORT=8082
+    ports:
+      - "8082:8082"
+    networks:
+      - dominus_network
+
+volumes:
+  dominus_investor_pgdata:
+    driver: local
+
+networks:
+  dominus_network:
+    driver: bridge

@@ -98,6 +98,10 @@ app.include_router(api_router)
 app.include_router(ws_router)
 app.include_router(media_router)
 
+@app.get("/health")
+async def health_check():
+    return {"status": "ok", "service": "dominus-investor"}
+
 if __name__ == "__main__":
     uvicorn.run(
         "src.main:app",
