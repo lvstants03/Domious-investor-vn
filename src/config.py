@@ -43,7 +43,9 @@ class Settings(BaseSettings):
     TRADING_END: str = "16:00"
     NEWS_BOOST_MAX: float = 15.0
     NEWS_IMPACT_THRESHOLD: float = 6.0
-    NEWS_URGENCY_HOURS: int = 2
+    # Firecrawl AI Scraping & Alpha Engine
+    FIRECRAWL_API_KEY: Optional[str] = None
+    FIRECRAWL_BASE_URL: str = "https://api.firecrawl.dev/v1"
     
     model_config = SettingsConfigDict(
         env_file=__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.abspath(__file__))), ".env"),
