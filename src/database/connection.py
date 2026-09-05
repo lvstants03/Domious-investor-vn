@@ -33,6 +33,9 @@ AsyncSessionLocal = async_sessionmaker(
     expire_on_commit=False
 )
 
+# Alias tuong thich cho cac module dung async_session_maker
+async_session_maker = AsyncSessionLocal
+
 async def init_db():
     """Khoi tao cac bang CSDL cho dominus-investor neu chua ton tai (dung cho dev/sqlite)"""
     try:
