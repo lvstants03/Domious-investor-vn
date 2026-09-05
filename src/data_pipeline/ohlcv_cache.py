@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 import threading
 from datetime import date, timedelta
 from typing import Dict, Optional, Tuple
@@ -42,12 +42,8 @@ class OHLCVDailyCache:
                 df, cached_date = self._store[sym]
                 if cached_date == today:
                     return df
-
-        df = self._fetch(sym)
-        if df is not None and not df.empty:
-            with self._lock:
-                self._store[sym] = (df, today)
-        return df
+            # Khong goi fetch dong bo de tranh block HTTP request nguoi dung
+            return None
 
     def get_52w_high(self, symbol: str) -> Optional[float]:
         """

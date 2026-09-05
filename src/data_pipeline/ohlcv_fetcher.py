@@ -18,35 +18,45 @@ class OHLCVFetcher:
 
     def fetch_history_sync(self, symbol: str, start_date: str, end_date: str) -> Optional[pd.DataFrame]:
         """
-        Lay OHLCV lich su cho 1 ma. Chay dong bo (dung cho batch processing).
-        Dung vnstock v4 API: vnstock.api.quote.Quote(symbol, source='VCI')
-        Tra ve DataFrame [symbol, trade_date, open, high, low, close, volume] hoac None neu loi.
+        Lay OHLCV lich su cho 1 ma co timeout 2.0s de tranh block luong.
+        Thu lan luot cac nguon: KBS, MSN, VCI.
         """
-        try:
-            # vnstock v4: su dung Quote API moi, source ho tro: KBS, VCI, MSN, FMP
+        import concurrent.futures
+        
+        def _do_fetch():
             from vnstock.api.quote import Quote
-            try:
-                q = Quote(symbol=symbol, source="VCI")
-            except TypeError:
+            # Thu cac nguon on dinh nhat truoc
+            for src in ["kbs", "msn", "vci"]:
                 try:
-                    q = Quote(source="VCI", symbol=symbol)
-                except TypeError:
-                    q = Quote(symbol)
-            df = q.history(start=start_date, end=end_date, interval="1D")
+                    q = Quote(symbol=symbol, source=src)
+                    df = q.history(start=start_date, end=end_date, interval="1D")
+                    if df is not None and not df.empty:
+                        return df
+                except Exception:
+                    continue
+            return None
+
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(_do_fetch)
+                try:
+                    df = future.result(timeout=2.0)
+                except concurrent.futures.TimeoutError:
+                    logger.debug("Fetch OHLCV %s timeout (>2s), bo qua", symbol)
+                    return None
+
             if df is None or df.empty:
-                logger.warning("Khong co du lieu OHLCV cho ma %s tu %s den %s", symbol, start_date, end_date)
                 return None
-            # Chuan hoa ten cot: 'time' -> 'trade_date'
+
             if "time" in df.columns:
                 df = df.rename(columns={"time": "trade_date"})
             df["trade_date"] = pd.to_datetime(df["trade_date"]).dt.date
             df["symbol"] = symbol.upper()
-            # Loai bo hang co du lieu thieu
             required_cols = ["trade_date", "open", "high", "low", "close", "volume"]
             df = df.dropna(subset=required_cols)
             return df[["symbol", "trade_date", "open", "high", "low", "close", "volume"]]
         except Exception as e:
-            logger.error("Loi khi lay OHLCV cho ma %s: %s", symbol, str(e))
+            logger.debug("Loi khi lay OHLCV cho ma %s: %s", symbol, str(e))
             return None
 
     async def fetch_history(self, symbol: str, start_date: str, end_date: str) -> Optional[pd.DataFrame]:

@@ -182,42 +182,47 @@ class PositionHunterPredictor:
             foreign_stat = stat.get("foreign", {})
             foreign_net_val = float(foreign_stat.get("net_val", 0.0)) if isinstance(foreign_stat, dict) else 0.0
 
-            # --- DU LIEU THUC TU OHLCV CACHE (thay the sym_seed gia) ---
-            real_52w_high = ohlcv_cache.get_52w_high(sym)
+            # --- DU LIEU THUC TU OHLCV CACHE (Goi 1 lan duy nhat) ---
+            df_sym = ohlcv_cache.get_ohlcv_df(sym)
+            real_52w_high = None
+            if df_sym is not None and not df_sym.empty:
+                try:
+                    real_52w_high = float(df_sym.tail(252)["high"].max())
+                except Exception:
+                    pass
+
             if real_52w_high and real_52w_high > 0 and last_price > 0:
                 dist_52w_pct = abs((last_price - real_52w_high) / real_52w_high * 100)
             else:
-                # Conservative fallback: coi la xa dinh 30% -> diem 52W thap
                 dist_52w_pct = 30.0
 
-            real_base_weeks, real_close_above_zone = ohlcv_cache.get_base_info(sym)
-            base_weeks = real_base_weeks          # 0.0 neu khong co nen
-            close_above_zone = real_close_above_zone
-
-            # Vung tich luy: lay tu BaseDetector neu co, fallback theo % bien dong
-            if real_base_weeks > 0:
-                # Co nen thuc: dung support/resistance tu base_detector
-                df_sym = ohlcv_cache.get_ohlcv_df(sym)
+            real_base_weeks = 0.0
+            real_close_above_zone = False
+            _detected_base = None
+            if df_sym is not None and len(df_sym) >= 30:
                 try:
                     from src.wyckoff.base_detector import base_detector as _bd
-                    _base = _bd.detect_base(df_sym, lookback=60) if df_sym is not None else None
-                    if _base:
-                        acc_low = round(_base.support_level / 100) * 100
-                        acc_high = round(_base.resistance_level / 100) * 100
-                    else:
-                        acc_low = round((last_price * 0.95) / 100) * 100
-                        acc_high = round((last_price * 1.05) / 100) * 100
+                    _detected_base = _bd.detect_base(df_sym, lookback=60)
+                    if _detected_base:
+                        real_base_weeks = round(_detected_base.base_length_days / 5.0, 1)
+                        last_close = float(df_sym["close"].iloc[-1])
+                        real_close_above_zone = last_close >= _detected_base.support_level
                 except Exception:
-                    acc_low = round((last_price * 0.95) / 100) * 100
-                    acc_high = round((last_price * 1.05) / 100) * 100
+                    pass
+
+            base_weeks = real_base_weeks
+            close_above_zone = real_close_above_zone
+
+            if real_base_weeks > 0 and _detected_base:
+                acc_low = round(_detected_base.support_level / 100) * 100
+                acc_high = round(_detected_base.resistance_level / 100) * 100
             else:
                 acc_low = round((last_price * 0.95) / 100) * 100
                 acc_high = round((last_price * 1.05) / 100) * 100
 
             # Volume so sanh voi MA20 thuc te
-            df_sym_vol = ohlcv_cache.get_ohlcv_df(sym)
-            if df_sym_vol is not None and len(df_sym_vol) >= 20:
-                ma20_vol = float(df_sym_vol["volume"].tail(20).mean())
+            if df_sym is not None and len(df_sym) >= 20:
+                ma20_vol = float(df_sym["volume"].tail(20).mean())
                 estimated_avg_vol = max(100000, int(ma20_vol))
             else:
                 estimated_avg_vol = max(100000, int(vol * 0.8))
