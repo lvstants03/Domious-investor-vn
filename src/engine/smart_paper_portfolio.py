@@ -10,14 +10,14 @@ logger = logging.getLogger("dominus-investor.engine.paper_portfolio")
 
 DEFAULT_CAPITAL = 1_000_000_000.0  # Von gia lap mac dinh: 1 Ty VND
 MAX_ALLOC_PER_STOCK = 0.20        # Toi da 20% danh muc cho 1 ma (200 trieu)
-MIN_PROFIT_TARGET_PCT = 10.0      # Muc tieu loi nhuan toi thieu de bat che do khoa lai: 10%
-STOP_LOSS_PCT = -6.0              # Cat lo ky luat: -6%
+MIN_PROFIT_TARGET_PCT = 30.0      # Muc tieu song quy: +30%
+STOP_LOSS_PCT = -9.0              # Cat lo cau truc Wyckoff: -9%
 
 class SmartPaperPortfolioManager:
     """
     Quan ly Danh muc Dau tu Gia lap Thuc chien (Smart Paper Portfolio).
     Khop theo gia thuc te tren san TCBS, tu dong ap dung chien luoc
-    Gong Lai Dong (Dynamic Holding) voi muc tieu toi thieu >= 10%.
+    Gong Lai Dong (Dynamic Holding) cho vi the quy 1-3 thang (Target +30%).
     """
 
     def __init__(self):
@@ -75,15 +75,22 @@ class SmartPaperPortfolioManager:
                 total_stock_value += val
                 total_unrealized_pnl += unrealized_pnl
 
-                # Logic Trailing Stop & Trang thai gong lai
+                # Logic Trailing Stop & Trang thai gong lai song quy (1-3 thang)
                 is_target_hit = pnl_pct >= MIN_PROFIT_TARGET_PCT
-                trailing_stop_price = round(p.avg_cost * 1.07) if is_target_hit else round(p.avg_cost * (1 + STOP_LOSS_PCT / 100))
                 
-                status_badge = "DANG GONG LAI: SONG MANH" if is_target_hit else "DANG TICH LUY VI THE"
+                # Co che Khoa Hoa Von (Break-Even) khi lai >= 15%
                 if pnl_pct >= 15.0:
-                    status_badge = "DAT CHI TIEU XUAT SAC: NUOI SONG LON"
-                elif pnl_pct <= -4.0:
-                    status_badge = "CANH BAO RUI RO: GAN NGUONG CAT LO"
+                    trailing_stop_price = max(round(p.avg_cost * 1.005), round(current_p * 0.88))
+                    status_badge = "KHOA HOA VON: BREAK-EVEN"
+                elif is_target_hit:
+                    trailing_stop_price = round(current_p * 0.88)  # Trailing 12% tu dinh
+                    status_badge = "DAT TARGET QUY: +30%"
+                elif pnl_pct >= 0:
+                    trailing_stop_price = round(p.avg_cost * (1 + STOP_LOSS_PCT / 100))
+                    status_badge = "DANG GONG SONG QUY"
+                else:
+                    trailing_stop_price = round(p.avg_cost * (1 + STOP_LOSS_PCT / 100))
+                    status_badge = "CANH BAO: DANG RUNG LAC NEN" if pnl_pct > -6.0 else "CANH BAO RUI RO: GAN CAT LO"
 
                 active_positions.append({
                     "id": p.id,
