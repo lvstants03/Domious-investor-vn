@@ -92,6 +92,37 @@ class SmartPaperPortfolioManager:
                     trailing_stop_price = round(p.avg_cost * (1 + STOP_LOSS_PCT / 100))
                     status_badge = "CANH BAO: DANG RUNG LAC NEN" if pnl_pct > -6.0 else "CANH BAO RUI RO: GAN CAT LO"
 
+                # Tu dong chot lenh Ban khi vi pham cat lo hoac trailing stop
+                should_auto_exit = False
+                exit_action_reason = ""
+                if pnl_pct <= STOP_LOSS_PCT:
+                    should_auto_exit = True
+                    exit_action_reason = f"Cat lo ky luat Wyckoff ({pnl_pct:.1f}%)"
+                elif pnl_pct >= 15.0 and current_p <= (p.avg_cost * 1.005):
+                    should_auto_exit = True
+                    exit_action_reason = "Bao toan von: Break-Even"
+                elif is_target_hit and current_p <= trailing_stop_price:
+                    should_auto_exit = True
+                    exit_action_reason = f"Chot loi Target Song Quy ({pnl_pct:.1f}%)"
+
+                if should_auto_exit:
+                    t_exit = Trade(
+                        symbol=p.symbol,
+                        action="SELL",
+                        quantity=p.quantity,
+                        price=current_p,
+                        total_value=val,
+                        pnl=unrealized_pnl,
+                        pnl_pct=pnl_pct,
+                        mode="paper",
+                        status="FILLED",
+                        created_at=datetime.utcnow(),
+                        filled_at=datetime.utcnow()
+                    )
+                    session.add(t_exit)
+                    p.quantity = 0
+                    continue
+
                 active_positions.append({
                     "id": p.id,
                     "symbol": p.symbol,
@@ -117,7 +148,7 @@ class SmartPaperPortfolioManager:
             win_rate = (len(winning_trades) / len(total_closed_trades) * 100) if total_closed_trades else 80.0
 
             # Tien mat con lai = Von ban dau - Tong gia von dang giu + PnL da chot
-            total_cost_invested = sum(p.avg_cost * p.quantity for p in positions)
+            total_cost_invested = sum(p.avg_cost * p.quantity for p in positions if p.quantity > 0)
             cash_balance = max(0.0, self.initial_capital - total_cost_invested + realized_pnl)
             current_nav = cash_balance + total_stock_value
             total_return_pct = ((current_nav - self.initial_capital) / self.initial_capital) * 100
@@ -147,6 +178,143 @@ class SmartPaperPortfolioManager:
                     } for t in trades[:10]
                 ]
             }
+
+    async def auto_sync_with_hunter(self, forced: bool = False) -> Dict[str, Any]:
+        """
+        Ket noi tu dong voi Position Hunter Predictor Engine de giai ngan va quan tri danh muc:
+        1. Xac dinh Nguong diem linh hoat (Dynamic Threshold) dua vao Market Regime:
+           - BULL: min_score = 70.0 (thi truong thuan loi, don som sieu co phieu)
+           - RE_ACCUMULATION / ACCUMULATION_EARLY: min_score = 75.0
+           - DISTRIBUTION_WARNING / SPRING_REBOUND: min_score = 80.0
+           - BEAR: Khong giai ngan moi
+        2. Chien luoc tap trung toi da hoa loi nhuan (High-Conviction 3 - 5 ma):
+           - Score >= 85: Giai ngan 30% NAV (300 Tr)
+           - Score >= 75: Giai ngan 20% NAV (200 Tr)
+           - Score >= 70: Giai ngan 15% NAV (150 Tr)
+        3. Tu dong dat lenh mua theo gia realtime TCBS.
+        """
+        async with async_session_maker() as session:
+            from src.data_pipeline.market_regime_gate import market_regime_gate
+            from src.engine.position_hunter_predictor import position_hunter_predictor
+            from src.tcbs.market import market_client
+
+            regime_info = await market_regime_gate.get_market_regime()
+            is_safe = regime_info.get("is_buy_allowed", True)
+            regime_type = regime_info.get("regime", "BULL")
+
+            if not is_safe and not forced:
+                logger.info("Thi truong dang trong pha rui ro / BEAR, tu dong khoa giai ngan moi.")
+                return await self.get_portfolio_summary()
+
+            # 1. Nguong diem linh hoat theo che do thi truong
+            if regime_type == "BULL":
+                min_score = 70.0
+            elif regime_type in ("RE_ACCUMULATION", "ACCUMULATION_EARLY"):
+                min_score = 75.0
+            else:
+                min_score = 80.0
+
+            # 2. Lay danh sach vi the hien tai
+            res_pos = await session.execute(
+                select(Position).where(Position.mode == "paper", Position.quantity > 0)
+            )
+            current_positions = res_pos.scalars().all()
+            holding_symbols = {p.symbol.upper() for p in current_positions}
+
+            # 3. Tinh suc mua kha dung
+            res_trades = await session.execute(
+                select(Trade).where(Trade.mode == "paper")
+            )
+            all_trades = res_trades.scalars().all()
+            realized_pnl = sum(t.pnl for t in all_trades if t.pnl is not None and t.action == "SELL")
+            total_invested = sum(p.avg_cost * p.quantity for p in current_positions)
+            cash_available = max(0.0, self.initial_capital - total_invested + realized_pnl)
+
+            # 4. Quet co hoi tu Position Hunter
+            forecast = await position_hunter_predictor.scan_medium_term_opportunities(basket="ALL")
+            opportunities = forecast.get("opportunities", [])
+
+            # Loc cac ung vien dat tieu chuan
+            qualified = [
+                op for op in opportunities
+                if op.get("score", 0.0) >= min_score and op.get("symbol", "").upper() not in holding_symbols
+            ]
+            qualified.sort(key=lambda x: x.get("score", 0.0), reverse=True)
+
+            # Giai ngan toi da hoa loi nhuan (toi da 5 ma trong danh muc)
+            current_count = len(current_positions)
+            for cand in qualified:
+                if current_count >= 5 or cash_available < 100_000_000.0:
+                    break
+
+                sym = cand.get("symbol", "").upper()
+                score = cand.get("score", 70.0)
+
+                # Ty trong linh hoat toi uu loi nhuan
+                if score >= 85.0:
+                    alloc = min(cash_available, 300_000_000.0)
+                elif score >= 75.0:
+                    alloc = min(cash_available, 200_000_000.0)
+                else:
+                    alloc = min(cash_available, 150_000_000.0)
+
+                if alloc < 50_000_000.0:
+                    continue
+
+                # Lay gia realtime tu TCBS
+                price = float(cand.get("current_price") or 0.0)
+                if price <= 0:
+                    try:
+                        p_info = await market_client.get_price_info(sym)
+                        price = float(p_info.get("price") or 0.0)
+                    except Exception:
+                        price = 0.0
+
+                if price <= 0:
+                    continue
+
+                qty = int((alloc / price) // 100) * 100
+                if qty <= 0:
+                    continue
+
+                actual_cost = price * qty
+                if actual_cost > cash_available:
+                    continue
+
+                # Mo vi the mua tu dong
+                new_pos = Position(
+                    symbol=sym,
+                    quantity=qty,
+                    avg_cost=price,
+                    current_price=price,
+                    unrealized_pnl=0.0,
+                    unrealized_pnl_pct=0.0,
+                    mode="paper",
+                    updated_at=datetime.utcnow()
+                )
+                session.add(new_pos)
+
+                new_trade = Trade(
+                    symbol=sym,
+                    action="BUY",
+                    quantity=qty,
+                    price=price,
+                    total_value=actual_cost,
+                    mode="paper",
+                    status="FILLED",
+                    created_at=datetime.utcnow(),
+                    filled_at=datetime.utcnow()
+                )
+                session.add(new_trade)
+
+                cash_available -= actual_cost
+                current_count += 1
+                holding_symbols.add(sym)
+                logger.info("Auto-Hunter giai ngan thanh cong %s: %d cp gia %.0fd (Score: %.1f)", sym, qty, price, score)
+
+            await session.commit()
+
+        return await self.get_portfolio_summary()
 
     async def _seed_initial_paper_positions(self, session):
         """Khoi tao vi the ban dau theo gia thuc te tren san TCBS, loai bo hoan toan du lieu mau cu"""
@@ -189,7 +357,8 @@ class SmartPaperPortfolioManager:
                     total_value=total_cost,
                     mode="paper",
                     status="FILLED",
-                    created_at=datetime.utcnow()
+                    created_at=datetime.utcnow(),
+                    filled_at=datetime.utcnow()
                 )
                 session.add(t)
             except Exception as e:
@@ -198,12 +367,17 @@ class SmartPaperPortfolioManager:
         await session.commit()
 
     async def reset_portfolio(self) -> Dict[str, Any]:
-        """Xoa danh muc de tao lai tu dau voi so von 1 Ty VND"""
+        """Xoa danh muc de tao lai tu dau voi so von 1 Ty VND va tu dong ket noi Hunter"""
         async with async_session_maker() as session:
             await session.execute(delete(Position).where(Position.mode == "paper"))
             await session.execute(delete(Trade).where(Trade.mode == "paper"))
             await session.commit()
             await self._seed_initial_paper_positions(session)
-        return await self.get_portfolio_summary()
+        # Thu dong bo ngay voi Position Hunter de xem co sieu co phieu nao khong
+        try:
+            return await self.auto_sync_with_hunter()
+        except Exception as e:
+            logger.warning("Loi auto sync sau reset: %s", e)
+            return await self.get_portfolio_summary()
 
 smart_paper_portfolio = SmartPaperPortfolioManager()

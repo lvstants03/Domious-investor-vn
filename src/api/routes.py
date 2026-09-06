@@ -1687,6 +1687,17 @@ async def reset_paper_portfolio():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/api/paper-portfolio/auto-sync")
+async def auto_sync_paper_portfolio():
+    """Tu dong giai ngan theo tin hieu xuat sac tu Position Hunter Engine"""
+    try:
+        from src.engine.smart_paper_portfolio import smart_paper_portfolio
+        return await smart_paper_portfolio.auto_sync_with_hunter(forced=False)
+    except Exception as e:
+        logger.error("Loi khi auto-sync paper portfolio: %s", str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/api/intelligence/firecrawl/scrape")
 async def scrape_with_firecrawl(request: Request):
     """

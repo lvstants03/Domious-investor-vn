@@ -104,12 +104,18 @@ class PositionHunterPredictor:
 
         async def _warming_task():
             await asyncio.sleep(3)  # Doi server on dinh sau khi startup
-            logger.info("Khoi dong Position Hunter Background Cache Warming loop...")
             while True:
                 try:
                     for b in ["ALL", "VN30", "VNMID"]:
                         await self.scan_medium_term_opportunities(basket=b)
                         await asyncio.sleep(1)
+                    
+                    # Tu dong dong bo va giai ngan cho Smart Paper Portfolio theo co hoi moi
+                    try:
+                        from src.engine.smart_paper_portfolio import smart_paper_portfolio
+                        await smart_paper_portfolio.auto_sync_with_hunter()
+                    except Exception as e:
+                        logger.debug("Loi auto-sync paper portfolio trong background: %s", e)
                 except Exception as e:
                     logger.debug("Loi trong background warming loop: %s", e)
                 await asyncio.sleep(60)
