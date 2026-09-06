@@ -1354,17 +1354,32 @@ async def get_market_bid_ask_depth(symbol: str):
         f_buy = float(matched_item.get("buyForeignQtty") or 0.0)
         f_sell = float(matched_item.get("sellForeignQtty") or 0.0)
         f_net_vol = int(f_buy - f_sell)
-        f_net_val = round((f_net_vol * last_price) / 1e9, 2)
-        f_room = float(matched_item.get("room") or matched_item.get("foreign_room_left") or 0.0)
+        f_buy_val = round((f_buy * last_price) / 1e9, 2)
+        f_sell_val = round((f_sell * last_price) / 1e9, 2)
+        f_net_val = round(f_buy_val - f_sell_val, 2)
+        f_room = max(0.0, float(matched_item.get("room") or matched_item.get("foreign_room_left") or 0.0))
         
         foreign_data = {
             "net_val": f_net_val,
             "net_vol": f_net_vol,
+            "buy_vol": int(f_buy),
+            "sell_vol": int(f_sell),
+            "buy_val": f_buy_val,
+            "sell_val": f_sell_val,
             "room_left": f_room,
-            "foreign_buy_pct": 0.0
+            "foreign_buy_pct": round((f_buy / (f_buy + f_sell)) * 100, 1) if (f_buy + f_sell) > 0 else 0.0
         }
     else:
-        foreign_data = {"net_val": 0.0, "net_vol": 0, "room_left": 0.0, "foreign_buy_pct": 0.0}
+        foreign_data = {
+            "net_val": 0.0,
+            "net_vol": 0,
+            "buy_vol": 0,
+            "sell_vol": 0,
+            "buy_val": 0.0,
+            "sell_val": 0.0,
+            "room_left": 0.0,
+            "foreign_buy_pct": 0.0
+        }
 
     result = {
         "symbol": sym_upper,

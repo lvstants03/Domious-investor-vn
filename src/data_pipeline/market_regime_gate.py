@@ -110,45 +110,45 @@ class MarketRegimeGate:
             # 1. DISTRIBUTION WARNING (Phan phoi dinh - Canh bao sap Downtrend)
             if cur_close >= cur_ema50 and rsi > 70 and slope < 0.1:
                 regime = "DISTRIBUTION_WARNING"
-                regime_vn = "PHAN PHOI DINH (CANH BAO SAP DOWNTREND)"
+                regime_vn = "PHÂN PHỐI ĐỈNH (CẢNH BÁO SẮP DOWNTREND)"
                 is_buy_allowed = False
                 risk_level = "CAO"
-                status_message = "CANH BAO SOM: VNINDEX xuat hien tin hieu phan phoi vung dinh (RSI qua mua + dong tien chot loi). De xuat ha ty trong, chu dong chot loi bao toan von."
+                status_message = "CẢNH BÁO SỚM: VNINDEX xuất hiện tín hiệu phân phối vùng đỉnh (RSI quá mua + dòng tiền chốt lời). Đề xuất hạ tỷ trọng, chủ động chốt lời bảo toàn vốn."
             # 2. ACCUMULATION EARLY (Tich luy day - Canh bao sap Uptrend)
             elif cur_close < cur_ema50 and rsi < 40 and slope > -0.1:
                 regime = "ACCUMULATION_EARLY"
-                regime_vn = "TICH LUY DAY (CANH BAO SAP UPTREND)"
+                regime_vn = "TÍCH LŨY ĐÁY (CẢNH BÁO SẮP UPTREND)"
                 is_buy_allowed = True
-                risk_level = "THAP"
-                status_message = "CO HOI CHAN SONG: VNINDEX tao day tich luy kiet cung. Cho phep mua gom tham do 30% - 40% o cac ma dan song."
+                risk_level = "THẤP"
+                status_message = "CƠ HỘI CHÂN SÓNG: VNINDEX tạo đáy tích lũy cạn cung. Cho phép mua gom thăm dò 30% - 40% ở các mã dẫn sóng."
             # 3. SPRING REBOUND (Dao chieu rut chan ky thuat)
             elif cur_close < cur_ema50 and (cur_close > float(lows[-1]) * 1.015) and rsi < 35:
                 regime = "SPRING_REBOUND"
-                regime_vn = "PHUC HOI CHAN SONG (RUT CHAN DAO CHIEU)"
+                regime_vn = "PHỤC HỒI CHÂN SÓNG (RÚT CHÂN ĐẢO CHIỀU)"
                 is_buy_allowed = True
-                risk_level = "TRUNG BINH"
-                status_message = "Tin hieu bat day Spring: Thi truong ru bo thanh cong va rut chan manh. Cho phep mua luot T+ ty trong nho 15-20%."
+                risk_level = "TRUNG BÌNH"
+                status_message = "Tín hiệu bắt đáy Spring: Thị trường rũ bỏ thành công và rút chân mạnh. Cho phép mua lướt T+ tỷ trọng nhỏ 15-20%."
             # 4. BULL MARKUP (Uptrend bung no)
             elif cur_close >= cur_ema20 and cur_ema20 >= cur_ema50 and slope >= 0:
                 regime = "BULL"
-                regime_vn = "UPTREND (TANG TRUONG BUNG NO)"
+                regime_vn = "UPTREND (TĂNG TRƯỞNG BÙNG NỔ)"
                 is_buy_allowed = True
-                risk_level = "THAP"
-                status_message = "Thi truong Uptrend an toan: VNINDEX tren MA20 & MA50. Cho phep giai ngan toi da 100% ty trong."
+                risk_level = "THẤP"
+                status_message = "Thị trường Uptrend an toàn: VNINDEX trên MA20 & MA50. Cho phép giải ngân tối đa 100% tỷ trọng."
             # 5. BEAR DOWNTREND (Downtrend gay MA50)
             elif cur_close < cur_ema50 and slope < -0.2:
                 regime = "BEAR"
-                regime_vn = "DOWNTREND (RUI RO CAO)"
+                regime_vn = "DOWNTREND (RỦI RO CAO)"
                 is_buy_allowed = False
                 risk_level = "CAO"
-                status_message = "CANH BAO: VNINDEX dang trong pha Downtrend/Gay MA50. TU DONG KHOA MUA MOI DE BAO VE VON."
+                status_message = "CẢNH BÁO: VNINDEX đang trong pha Downtrend/Gãy MA50. TỰ ĐỘNG KHÓA MUA MỚI ĐỂ BẢO VỆ VỐN."
             # 6. RE_ACCUMULATION (Tai tich luy giu MA20)
             else:
                 regime = "RE_ACCUMULATION"
-                regime_vn = "TAI TICH LUY (GIU VUNG MA20)"
+                regime_vn = "TÁI TÍCH LŨY (GIỮ VỮNG MA20)"
                 is_buy_allowed = True
-                risk_level = "TRUNG BINH"
-                status_message = "Thi truong tai tich luy: VNINDEX kiem dinh vung ho tro MA20. Cho phep mua gia tang khi test cung thanh cong."
+                risk_level = "TRUNG BÌNH"
+                status_message = "Thị trường tái tích lũy: VNINDEX kiểm định vùng hỗ trợ MA20. Cho phép mua gia tăng khi test cung thành công."
 
             res = {
                 "regime": regime,
@@ -174,15 +174,15 @@ class MarketRegimeGate:
                 return self._cache_data
             return {
                 "regime": "UPDATING",
-                "regime_vn": "DANG CAP NHAT",
+                "regime_vn": "ĐANG CẬP NHẬT",
                 "is_buy_allowed": True,
-                "risk_level": "TRUNG BINH",
+                "risk_level": "TRUNG BÌNH",
                 "vnindex_close": 0.0,
                 "ema20": 0.0,
                 "ema50": 0.0,
                 "trend_slope": 0.0,
                 "rsi": 50.0,
-                "status_message": "Dang khoi tao du lieu chi so VN-INDEX.",
+                "status_message": "Đang khởi tạo dữ liệu chỉ số VN-INDEX.",
                 "updated_at": date.today().strftime("%Y-%m-%d")
             }
 

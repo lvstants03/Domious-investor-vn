@@ -342,85 +342,85 @@ class PositionHunterPredictor:
             # Xep loai Action Badge & Danh gia Win Rate
             if not is_market_safe:
                 if final_score >= 70 and (is_silent_acc or is_kiet_cung):
-                    action_badge = "THAM DO (15%)"
-                    win_rate_est = "60% (Tham do day)"
+                    action_badge = "THĂM DÒ (15%)"
+                    win_rate_est = "60% (Thăm dò đáy)"
                 else:
-                    action_badge = "TAM DUNG MUA"
-                    win_rate_est = "<50% (Downtrend)"
+                    action_badge = "TẠM DỪNG MUA"
+                    win_rate_est = "<50% (Xu hướng giảm)"
             else:
                 if final_score >= 75:
-                    action_badge = "MUA BREAKOUT" if is_breakout else "MUA GOM"
+                    action_badge = "MUA BỨT PHÁ" if is_breakout else "MUA GOM"
                     win_rate_est = "75%+"
                 elif final_score >= 60:
-                    action_badge = "THEO DOI"
+                    action_badge = "THEO DÕI"
                     win_rate_est = "65%"
                 else:
-                    action_badge = "KHONG MUA"
+                    action_badge = "KHÔNG MUA"
                     win_rate_est = "<55%"
 
             # === LAYER 4: RISK OVERLAY ===
             risk_warnings = []
             if foreign_net_val < 0 and abs(foreign_net_val) > (val_ty * 1e9 * 0.30):
-                risk_warnings.append("Khoi Ngoai xa manh >30% GTGD")
+                risk_warnings.append("Khối Ngoại xả mạnh >30% GTGD")
             if final_score > 80 and foreign_net_val < 0:
-                risk_warnings.append("Canh bao bi xa khi co diem cao")
+                risk_warnings.append("Cảnh báo bị xả khi có điểm cao")
 
             is_confirmed_signal = shark_net_val > 0 and foreign_net_val > 0
 
             # Early signal
             if is_breakout:
-                early_signal_badge = "BREAKOUT NO VOL"
-                early_signal_desc = "Xac nhan dong thuan but pha khoi nen gia."
+                early_signal_badge = "BỨT PHÁ NỔ VOL"
+                early_signal_desc = "Xác nhận đồng thuận bứt phá khỏi nền giá."
             elif is_kiet_cung:
-                early_signal_badge = "KIET CUNG RUT CHAN"
-                early_signal_desc = "Thanh khoan can kiet - Diem gom sat day nen an toan."
+                early_signal_badge = "CẠN CUNG RÚT CHÂN"
+                early_signal_desc = "Thanh khoản cạn kiệt - Điểm gom sát đáy nền an toàn."
             elif is_silent_acc:
-                early_signal_badge = "GOM LANG LE"
-                early_signal_desc = "Ca Map & Ngoai am tham vao hang trong vung tich luy."
+                early_signal_badge = "GOM LẶNG LẼ"
+                early_signal_desc = "Cá Mập & Khối Ngoại âm thầm vào hàng trong vùng tích lũy."
             else:
-                early_signal_badge = "TICH LUY NEN"
-                early_signal_desc = "Gia dang dao dong trong vung nen tich luy Wyckoff."
+                early_signal_badge = "TÍCH LŨY NỀN"
+                early_signal_desc = "Giá đang dao động trong vùng nền tích lũy Wyckoff."
 
             three_stage_plan = {
                 "stage_1": {
                     "pct": "40%",
-                    "name": "Mua Vung Nen / Spring",
+                    "name": "Mua Vùng Nền / Spring",
                     "price_target": f"{acc_low:,.0f}d",
-                    "desc": "Mua tham do gia thap nhat khi kiet cung"
+                    "desc": "Mua thăm dò giá thấp nhất khi cạn cung"
                 },
                 "stage_2": {
                     "pct": "30%",
-                    "name": "Gia Tang Giu MA10",
+                    "name": "Gia Tăng Giữ MA10",
                     "price_target": f"{round((last_price * 1.02)/100)*100:,.0f}d",
-                    "desc": "Mua gia tang khi test cung giu vung MA10"
+                    "desc": "Mua gia tăng khi test cung giữ vững MA10"
                 },
                 "stage_3": {
                     "pct": "30%",
-                    "name": "Full Ty Trong Breakout",
+                    "name": "Đủ Tỷ Trọng Breakout",
                     "price_target": f"{round((acc_high * 1.03)/100)*100:,.0f}d",
-                    "desc": "Danh full khi no Vol Spike >= 1.8x kem Ca Map"
+                    "desc": "Đánh đủ tỷ trọng khi nổ Vol Spike >= 1.8x kèm Cá Mập"
                 }
             }
 
             catalyst_points = []
             if is_fast_runner:
-                catalyst_points.append(f"Bien tang nhanh (+{change_pct:.1f}%), thanh khoan bup no {val_ty:.1f} Ty.")
+                catalyst_points.append(f"Biên tăng nhanh (+{change_pct:.1f}%), thanh khoản bùng nổ {val_ty:.1f} Tỷ.")
             if is_confirmed_signal:
-                catalyst_points.append("Tin hieu manh: Ca Map + Khoi Ngoai cung mua rong.")
+                catalyst_points.append("Tín hiệu mạnh: Cá Mập + Khối Ngoại cùng mua ròng.")
             elif is_breakout:
-                catalyst_points.append(f"Volume but pha x{vol_spike_ratio:.1f} lan SMA20.")
+                catalyst_points.append(f"Volume bứt phá x{vol_spike_ratio:.1f} lần SMA20.")
             elif is_kiet_cung:
-                catalyst_points.append(f"Kiet cung (Vol chi bang {vol_spike_ratio*100:.0f}% SMA20).")
+                catalyst_points.append(f"Cạn cung (Vol chỉ bằng {vol_spike_ratio*100:.0f}% SMA20).")
             if shark_net_val > 0:
-                catalyst_points.append(f"Shark gom rong +{shark_net_val/1e9:.1f} ty.")
+                catalyst_points.append(f"Shark gom ròng +{shark_net_val/1e9:.1f} tỷ.")
             if foreign_net_val > 0:
-                catalyst_points.append(f"Khoi Ngoai mua +{foreign_net_val/1e9:.1f} ty.")
+                catalyst_points.append(f"Khối Ngoại mua +{foreign_net_val/1e9:.1f} tỷ.")
             if foreign_room >= 50e6:
-                catalyst_points.append(f"Room Ngoai rong {foreign_room_str} (Dat chuan FTSE).")
+                catalyst_points.append(f"Room Ngoại rộng {foreign_room_str} (Đạt chuẩn FTSE).")
             if sector_rs_rating >= 1.2:
-                catalyst_points.append(f"Nganh {sector_calculator.get_sector_for_symbol(sym)} dan song (RS {sector_rs_rating:.2f}).")
+                catalyst_points.append(f"Ngành {sector_calculator.get_sector_for_symbol(sym)} dẫn sóng (RS {sector_rs_rating:.2f}).")
             if not catalyst_points:
-                catalyst_points.append("Nen gia tich luy can kiet vol, cho dong tien kich hoat.")
+                catalyst_points.append("Nền giá tích lũy cạn kiệt vol, chờ dòng tiền kích hoạt.")
 
             evaluated_candidates.append({
                 "symbol": sym,
@@ -441,15 +441,15 @@ class PositionHunterPredictor:
                 "stop_loss": stop_loss,
                 "upside_pct": upside_pct,
                 "rr_ratio": "1 : 3.8",
-                "wyckoff_phase": f"Pha B (Tich Luy - {base_weeks:.1f} tuan thuc te)",
+                "wyckoff_phase": f"Pha B (Tích Lũy - {base_weeks:.1f} tuần thực tế)",
                 "base_weeks": base_weeks,
-                "shark_net_7d": f"{'+' if shark_net_val >= 0 else ''}{shark_net_val/1e9:.1f} Ty",
-                "foreign_net_7d": f"{'+' if foreign_net_val >= 0 else ''}{foreign_net_val/1e9:.1f} Ty",
+                "shark_net_7d": f"{'+' if shark_net_val >= 0 else ''}{shark_net_val/1e9:.1f} Tỷ",
+                "foreign_net_7d": f"{'+' if foreign_net_val >= 0 else ''}{foreign_net_val/1e9:.1f} Tỷ",
                 "catalyst": " ".join(catalyst_points),
                 "triple_score": final_score,
                 "news_boost": news_boost,
                 "news_catalyst": news_context,
-                "risk_rating": "THAP" if final_score >= 70 else "TRUNG BINH",
+                "risk_rating": "THẤP" if final_score >= 70 else "TRUNG BÌNH",
                 "action_badge": action_badge,
                 "win_rate_est": win_rate_est,
                 "risk_warning": risk_warnings[0] if risk_warnings else None,
