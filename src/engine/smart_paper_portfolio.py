@@ -232,14 +232,42 @@ class SmartPaperPortfolioManager:
 
             # 4. Quet co hoi tu Position Hunter
             forecast = await position_hunter_predictor.scan_medium_term_opportunities(basket="ALL")
-            opportunities = forecast.get("opportunities", [])
+            opportunities = forecast.get("top_opportunities", []) or forecast.get("opportunities", [])
 
-            # Loc cac ung vien dat tieu chuan
-            qualified = [
-                op for op in opportunities
-                if op.get("score", 0.0) >= min_score and op.get("symbol", "").upper() not in holding_symbols
-            ]
-            qualified.sort(key=lambda x: x.get("score", 0.0), reverse=True)
+            # Loc cac ung vien theo tieu chi: TY LE RR CAO NHAT & TY LE LO THAP NHAT
+            # 1. Chi lay co phieu co R:R >= 2.5 (Target loi nhuan >= 2.5 lan Stop loss)
+            # 2. Score >= 33.0 (loai bo co phieu yeu kem kem duoi 30 diem nhu HPG 29.7)
+            # 3. Khong co trong danh muc da nam giu
+            qualified = []
+            for op in opportunities:
+                sym_op = op.get("symbol", "").upper()
+                if not sym_op or sym_op in holding_symbols:
+                    continue
+                score_val = float(op.get("triple_score") or op.get("score") or 0.0)
+                rr_raw = op.get("rr_ratio")
+                rr_val = 3.0
+                if isinstance(rr_raw, (int, float)):
+                    rr_val = float(rr_raw)
+                elif isinstance(rr_raw, str):
+                    try:
+                        rr_val = float(rr_raw.split(":")[-1].strip())
+                    except Exception:
+                        rr_val = 3.0
+                cur_p = float(op.get("current_price") or 0.0)
+                sl_p = float(op.get("stop_loss") or (cur_p * 0.93))
+                t2_p = float(op.get("target_2m") or (cur_p * 1.35))
+                if cur_p > sl_p and cur_p > 0:
+                    rr_calc = round((t2_p - cur_p) / (cur_p - sl_p), 2)
+                else:
+                    rr_calc = rr_val
+
+                if score_val >= 33.0 and rr_calc >= 2.5:
+                    op["effective_rr"] = rr_calc
+                    op["effective_score"] = score_val
+                    qualified.append(op)
+
+            # Sap xep uu tien: Ket hop Score cao nhat va R:R tot nhat de toi da hoa loi nhuan
+            qualified.sort(key=lambda x: (x.get("effective_score", 0) * 0.6 + x.get("effective_rr", 0) * 10 * 0.4), reverse=True)
 
             # Giai ngan toi da hoa loi nhuan (toi da 5 ma trong danh muc)
             current_count = len(current_positions)
@@ -248,16 +276,10 @@ class SmartPaperPortfolioManager:
                     break
 
                 sym = cand.get("symbol", "").upper()
-                score = cand.get("score", 70.0)
+                score = cand.get("effective_score", 40.0)
 
-                # Ty trong linh hoat toi uu loi nhuan
-                if score >= 85.0:
-                    alloc = min(cash_available, 300_000_000.0)
-                elif score >= 75.0:
-                    alloc = min(cash_available, 200_000_000.0)
-                else:
-                    alloc = min(cash_available, 150_000_000.0)
-
+                # Ty trong toi uu quan tri rui ro: 200 Trieu / ma (20% NAV)
+                alloc = min(cash_available, 200_000_000.0)
                 if alloc < 50_000_000.0:
                     continue
 
@@ -310,70 +332,23 @@ class SmartPaperPortfolioManager:
                 cash_available -= actual_cost
                 current_count += 1
                 holding_symbols.add(sym)
-                logger.info("Auto-Hunter giai ngan thanh cong %s: %d cp gia %.0fd (Score: %.1f)", sym, qty, price, score)
+                logger.info("Auto-Hunter giai ngan thanh cong %s: %d cp gia %.0fd (Score: %.1f, RR: %.2f)", sym, qty, price, score, cand.get("effective_rr", 0))
 
             await session.commit()
 
         return await self.get_portfolio_summary()
 
     async def _seed_initial_paper_positions(self, session):
-        """Khoi tao vi the ban dau theo gia thuc te tren san TCBS, loai bo hoan toan du lieu mau cu"""
-        from src.tcbs.market import market_client
-        target_symbols = ["FPT", "MWG", "TCB", "HPG"]
-        target_alloc_vnd = 200_000_000.0  # 200 Trieu VND / ma
-
-        for sym in target_symbols:
-            try:
-                p_info = await market_client.get_price_info(sym)
-                price = float(p_info.get("price") or 0.0)
-                if price <= 0:
-                    continue
-
-                # Tinh khoi luong theo lo 100 chuan HOSE
-                qty = int((target_alloc_vnd / price) // 100) * 100
-                if qty <= 0:
-                    qty = 100
-
-                total_cost = price * qty
-
-                p = Position(
-                    symbol=sym,
-                    quantity=qty,
-                    avg_cost=price,
-                    current_price=price,
-                    unrealized_pnl=0.0,
-                    unrealized_pnl_pct=0.0,
-                    mode="paper",
-                    updated_at=datetime.utcnow()
-                )
-                session.add(p)
-
-                # Ghi lai trade mua ban dau voi gia that
-                t = Trade(
-                    symbol=sym,
-                    action="BUY",
-                    quantity=qty,
-                    price=price,
-                    total_value=total_cost,
-                    mode="paper",
-                    status="FILLED",
-                    created_at=datetime.utcnow(),
-                    filled_at=datetime.utcnow()
-                )
-                session.add(t)
-            except Exception as e:
-                logger.warning("Loi khi lay gia TCBS khoi tao paper cho ma %s: %s", sym, str(e))
-
-        await session.commit()
+        """Khong nap co phieu cung - De Quỹ hoan toan khoi dau voi 100% Tien Mat va dong bo theo Hunter"""
+        pass
 
     async def reset_portfolio(self) -> Dict[str, Any]:
-        """Xoa danh muc de tao lai tu dau voi so von 1 Ty VND va tu dong ket noi Hunter"""
+        """Xoa danh muc de tao lai tu dau voi so von 1 Ty VND va tu dong giai ngan theo Hunter RR cao nhat"""
         async with async_session_maker() as session:
             await session.execute(delete(Position).where(Position.mode == "paper"))
             await session.execute(delete(Trade).where(Trade.mode == "paper"))
             await session.commit()
-            await self._seed_initial_paper_positions(session)
-        # Thu dong bo ngay voi Position Hunter de xem co sieu co phieu nao khong
+        # Tu dong giai ngan ngay vao top co phieu co RR cao nhat va diem tot nhat
         try:
             return await self.auto_sync_with_hunter()
         except Exception as e:
