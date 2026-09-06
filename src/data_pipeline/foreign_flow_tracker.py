@@ -24,7 +24,7 @@ class ForeignFlowTracker:
         if self._base_cache and (now - self._last_base_calc) < 15.0:
             return self._base_cache
 
-        active_stocks = await universe_scanner.scan_market_universe(min_liquidity_ty=1.0)
+        active_stocks = await universe_scanner.scan_market_universe(min_liquidity_ty=5.0)
         overview = big_order_tracker.get_overview()
         shark_stats = getattr(big_order_tracker, "symbol_stats", {}) or overview.get("symbol_stats", {})
 
@@ -35,15 +35,12 @@ class ForeignFlowTracker:
             if last_price <= 0:
                 continue
 
-            f_net_vol = float(stock.get("foreign_net_vol", 0.0))
-            vol = float(stock.get("volume", 0))
-
-            f_buy_vol = max(0.0, f_net_vol) + (vol * 0.08)
-            f_sell_vol = max(0.0, -f_net_vol) + (vol * 0.08)
-
+            # Su dung du lieu Khoi ngoai Mua va Ban thuc te tu TCBS
+            f_buy_vol = float(stock.get("foreign_buy_vol", 0.0))
+            f_sell_vol = float(stock.get("foreign_sell_vol", 0.0))
             f_buy_val = f_buy_vol * last_price
             f_sell_val = f_sell_vol * last_price
-            f_net_val = f_net_vol * last_price
+            f_net_val = f_buy_val - f_sell_val
 
             shark_net = 0.0
             if sym in shark_stats:

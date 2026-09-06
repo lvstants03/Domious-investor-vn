@@ -35,7 +35,7 @@ class MarketUniverseScanner:
 
         async def _fetch_index(idx):
             try:
-                snaps = await asyncio.wait_for(market_client.get_ticker_snaps(index=idx), timeout=1.8)
+                snaps = await asyncio.wait_for(market_client.get_ticker_snaps(index=idx), timeout=6.0)
                 return (idx, snaps if isinstance(snaps, list) else [])
             except Exception:
                 return (idx, [])
@@ -56,27 +56,41 @@ class MarketUniverseScanner:
                     val_vnd = raw_val if raw_val > 0 else (last_price * vol)
                     val_ty = val_vnd / 1e9
 
-                    # Lay khoi ngoai
-                    f_buy = float(item.get("buyForeignQtty") or 0)
-                    f_sell = float(item.get("sellForeignQtty") or 0)
+                    # Tinh toan bien do gia tang trong phien (Xung luc gia)
+                    raw_ref = float(item.get("refPrice") or item.get("reference") or 0.0)
+                    ref_price = round(raw_ref * 1000) if (0 < raw_ref < 1000) else round(raw_ref)
+                    pct_change = round(((last_price - ref_price) / ref_price) * 100, 2) if ref_price > 0 else 0.0
+
+                    # Trich xuat toan dien du lieu Khoi ngoai & Room ngoai thuc te tu TCBS
+                    f_buy = float(item.get("buyForeignQtty") or 0.0)
+                    f_sell = float(item.get("sellForeignQtty") or 0.0)
                     f_net_vol = f_buy - f_sell
-                    f_room = float(item.get("room") or item.get("foreign_room_left") or 0.0)
+                    f_buy_val = (f_buy * last_price) / 1e9 if last_price > 0 else 0.0
+                    f_sell_val = (f_sell * last_price) / 1e9 if last_price > 0 else 0.0
+                    f_net_val = f_buy_val - f_sell_val
+                    f_room = max(0.0, float(item.get("room") or item.get("foreign_room_left") or 0.0))
 
                     exchange_name = "HOSE" if index_id == 1 else ("HNX" if index_id == 3 else "UPCOM")
 
                     # Lay nganh dong
                     sector_name = item.get("industryName") or item.get("sector") or self.get_symbol_sector(sym)
 
-                    # Loc dinh luong: Giu cac ma co thanh khoan tich cuc hoac khoi luong giao dich
-                    if val_ty >= min_liquidity_ty or vol >= 5000:
+                    # Bo loc thanh khoan chuan: Chi giu ma thanh khoan >= min_liquidity_ty, vol >= 80,000 cp va gia >= 5,000d
+                    if val_ty >= min_liquidity_ty and vol >= 80000 and last_price >= 5000:
                         discovered.append({
                             "symbol": sym,
                             "exchange": exchange_name,
                             "sector": sector_name,
                             "last_price": last_price,
                             "volume": vol,
-                            "val_ty": val_ty,
+                            "val_ty": round(val_ty, 2),
+                            "pct_change": pct_change,
+                            "foreign_buy_vol": f_buy,
+                            "foreign_sell_vol": f_sell,
                             "foreign_net_vol": f_net_vol,
+                            "foreign_buy_val": round(f_buy_val, 2),
+                            "foreign_sell_val": round(f_sell_val, 2),
+                            "foreign_net_val": round(f_net_val, 2),
                             "foreign_room": f_room
                         })
         except Exception as e:

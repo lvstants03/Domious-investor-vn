@@ -1550,6 +1550,16 @@ async def get_position_hunter_forecast(basket: str = "ALL"):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/market/intelligence/foreign-investments")
+async def get_foreign_investment_intel(limit: int = 20):
+    """Lay danh sach tin tuc & dong von cac to chuc kinh te nuoc ngoai (FDI/FII/FTSE) da duoc loc sach tin rac"""
+    try:
+        from src.intelligence.foreign_capital_intelligence import foreign_capital_intel
+        return await foreign_capital_intel.get_foreign_investment_intel(limit=limit)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/market/position-hunter/allocate")
 async def allocate_position_hunter_capital(request: Request):
     """

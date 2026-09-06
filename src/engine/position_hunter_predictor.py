@@ -136,8 +136,8 @@ class PositionHunterPredictor:
         market_regime = await market_regime_gate.get_market_regime()
         is_market_safe = market_regime.get("is_buy_allowed", True)
 
-        # 2. Lay du lieu thi truong
-        universe = await universe_scanner.scan_market_universe(min_liquidity_ty=1.0)
+        # 2. Lay du lieu thi truong (Nguong thanh khoan chuan >= 5.0 Ty/phien)
+        universe = await universe_scanner.scan_market_universe(min_liquidity_ty=5.0)
         big_orders = getattr(big_order_tracker, "symbol_stats", {})
         sector_flows = sector_calculator.calculate_sector_flow(big_orders)
 
@@ -178,7 +178,7 @@ class PositionHunterPredictor:
             last_price = float(symbol_data.get("price") or symbol_data.get("last_price") or 0.0)
             vol = int(symbol_data.get("volume") or symbol_data.get("totalMatchVol") or 0)
             val_ty = float(symbol_data.get("total_val") or symbol_data.get("val_ty") or 0.0)
-            change_pct = float(symbol_data.get("percent_change") or symbol_data.get("change_pct") or 0.0)
+            change_pct = float(symbol_data.get("pct_change") or symbol_data.get("percent_change") or symbol_data.get("change_pct") or 0.0)
 
             if last_price <= 0:
                 continue
@@ -201,14 +201,35 @@ class PositionHunterPredictor:
             if basket == "VNSML" and (sym in VN100_SYMBOLS):
                 continue
 
-            # Lay thong tin Big Orders
+            # Lay thong tin Big Orders & Khoi Ngoai
             stat = big_orders.get(sym, {})
             shark_buy_val = float(stat.get("buy", 0.0)) * 1e9 if "buy" in stat else float(stat.get("buy_val", 0.0))
             shark_sell_val = float(stat.get("sell", 0.0)) * 1e9 if "sell" in stat else float(stat.get("sell_val", 0.0))
             shark_net_val = shark_buy_val - shark_sell_val
 
             foreign_stat = stat.get("foreign", {})
-            foreign_net_val = float(foreign_stat.get("net_val", 0.0)) if isinstance(foreign_stat, dict) else 0.0
+            raw_ws_foreign = float(foreign_stat.get("net_val", 0.0)) if isinstance(foreign_stat, dict) else 0.0
+            snap_foreign_net = float(symbol_data.get("foreign_net_val", 0.0)) * 1e9
+            # Uu tien du lieu realtime WebSocket, neu chua co lay tu snapshot TCBS thuc te
+            foreign_net_val = raw_ws_foreign if raw_ws_foreign != 0.0 else snap_foreign_net
+            foreign_buy_val = round(float(symbol_data.get("foreign_buy_val", 0.0)), 2)
+            foreign_sell_val = round(float(symbol_data.get("foreign_sell_val", 0.0)), 2)
+
+            # Xu ly Dư Room Ngoai & Phan loai chuan FTSE
+            foreign_room = max(0.0, float(symbol_data.get("foreign_room", 0.0)))
+            if foreign_room >= 1e6:
+                foreign_room_str = f"{foreign_room / 1e6:.1f}M cp"
+            elif foreign_room >= 1e3:
+                foreign_room_str = f"{foreign_room / 1e3:.1f}K cp"
+            else:
+                foreign_room_str = f"{int(foreign_room)} cp"
+
+            if foreign_room >= 50e6:
+                foreign_room_tag = "Room rộng (Chuẩn FTSE)"
+            elif foreign_room >= 10e6:
+                foreign_room_tag = "Room Vừa"
+            else:
+                foreign_room_tag = "Hạn chế Room"
 
             # --- DU LIEU THUC TU OHLCV CACHE (Goi 1 lan duy nhat) ---
             df_sym = ohlcv_cache.get_ohlcv_df(sym)
@@ -274,6 +295,9 @@ class PositionHunterPredictor:
             is_breakout = vol_spike_ratio >= 1.8 and close_above_zone
             is_silent_acc = (shark_net_val > 0 or foreign_net_val > 0) and vol_spike_ratio < 1.4
 
+            # Danh gia ma co bien tang nhanh (Fast Momentum Runner nhu GEX, GEE, VIC)
+            is_fast_runner = (change_pct >= 2.0 and vol_spike_ratio >= 1.2 and val_ty >= 15.0) or (change_pct >= 3.5 and val_ty >= 8.0)
+
             # === LAYER 2: SCORING ENGINE (Phan hoa lien tuc) ===
             s_shark = _score_shark_flow(shark_net_val, val_ty, foreign_net_val)
             s_wyckoff = _score_wyckoff(base_weeks, is_kiet_cung, close_above_zone, vol_spike_ratio)
@@ -287,6 +311,13 @@ class PositionHunterPredictor:
                 core_score += 3.0
             elif change_pct < -1.5:
                 core_score -= 3.0
+
+            # Thuong them cho co phieu but pha bien tang nhanh (nhu GEX, GEE, VIC)
+            if is_fast_runner:
+                core_score += 4.0
+            # Thuong them cho ma co Room ngoai rong dat chuan FTSE kem khoi ngoai gom rong
+            if foreign_room >= 50e6 and foreign_net_val > 0:
+                core_score += 3.0
 
             # Bonus xac nhan
             bonus_pct = 0.0
@@ -372,6 +403,8 @@ class PositionHunterPredictor:
             }
 
             catalyst_points = []
+            if is_fast_runner:
+                catalyst_points.append(f"Bien tang nhanh (+{change_pct:.1f}%), thanh khoan bup no {val_ty:.1f} Ty.")
             if is_confirmed_signal:
                 catalyst_points.append("Tin hieu manh: Ca Map + Khoi Ngoai cung mua rong.")
             elif is_breakout:
@@ -382,6 +415,8 @@ class PositionHunterPredictor:
                 catalyst_points.append(f"Shark gom rong +{shark_net_val/1e9:.1f} ty.")
             if foreign_net_val > 0:
                 catalyst_points.append(f"Khoi Ngoai mua +{foreign_net_val/1e9:.1f} ty.")
+            if foreign_room >= 50e6:
+                catalyst_points.append(f"Room Ngoai rong {foreign_room_str} (Dat chuan FTSE).")
             if sector_rs_rating >= 1.2:
                 catalyst_points.append(f"Nganh {sector_calculator.get_sector_for_symbol(sym)} dan song (RS {sector_rs_rating:.2f}).")
             if not catalyst_points:
@@ -393,6 +428,13 @@ class PositionHunterPredictor:
                 "exchange": symbol_data.get("exchange", "HOSE"),
                 "basket_tag": basket_tag,
                 "current_price": last_price,
+                "val_ty": val_ty,
+                "is_fast_runner": is_fast_runner,
+                "foreign_room": foreign_room,
+                "foreign_room_str": foreign_room_str,
+                "foreign_room_tag": foreign_room_tag,
+                "foreign_buy_val": foreign_buy_val,
+                "foreign_sell_val": foreign_sell_val,
                 "accumulation_zone": f"{acc_low:,.0f} - {acc_high:,.0f}d",
                 "target_1m": target_1m,
                 "target_2m": target_2m,
