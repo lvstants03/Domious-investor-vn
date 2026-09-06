@@ -1,4 +1,5 @@
 import logging
+import asyncio
 import time
 from typing import Dict, Any, List, Set, Optional
 from datetime import datetime
@@ -93,6 +94,27 @@ class PositionHunterPredictor:
         self._basket_cache: Dict[str, Dict[str, Any]] = {}
         self._cache_times: Dict[str, float] = {}
         self._cache_ttl: float = 120.0  # 120 giay (2 phut)
+        self._warming_started: bool = False
+
+    def start_background_warming(self):
+        """Khoi chay background pre-computation loop de luon co du lieu san sang trong RAM (< 50ms)"""
+        if self._warming_started:
+            return
+        self._warming_started = True
+
+        async def _warming_task():
+            await asyncio.sleep(3)  # Doi server on dinh sau khi startup
+            logger.info("Khoi dong Position Hunter Background Cache Warming loop...")
+            while True:
+                try:
+                    for b in ["ALL", "VN30", "VNMID"]:
+                        await self.scan_medium_term_opportunities(basket=b)
+                        await asyncio.sleep(1)
+                except Exception as e:
+                    logger.debug("Loi trong background warming loop: %s", e)
+                await asyncio.sleep(60)
+
+        asyncio.create_task(_warming_task())
 
     async def scan_medium_term_opportunities(self, basket: str = "ALL") -> Dict[str, Any]:
         """

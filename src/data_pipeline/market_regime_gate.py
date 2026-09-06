@@ -40,36 +40,40 @@ class MarketRegimeGate:
             try:
                 df = await asyncio.wait_for(
                     ohlcv_fetcher.fetch_history("VNINDEX", start_date, end_date),
-                    timeout=1.5
+                    timeout=7.0
                 )
-            except (asyncio.TimeoutError, Exception):
+            except (asyncio.TimeoutError, Exception) as e:
+                logger.debug("Fetch VNINDEX timeout/err: %s", e)
                 df = None
 
             if df is None or len(df) < 30:
                 try:
                     df = await asyncio.wait_for(
                         ohlcv_fetcher.fetch_history("VN30", start_date, end_date),
-                        timeout=1.0
+                        timeout=5.0
                     )
-                except (asyncio.TimeoutError, Exception):
+                except (asyncio.TimeoutError, Exception) as e:
+                    logger.debug("Fetch VN30 timeout/err: %s", e)
                     df = None
 
             if df is None or len(df) < 30:
-                res = {
-                    "regime": "SIDEWAYS",
-                    "regime_vn": "TICH LUY (DI NGANG)",
+                # Neu da co cache du lieu that truoc do thi giu nguyen
+                if self._cache_data is not None and self._cache_data.get("vnindex_close", 0) > 0:
+                    return self._cache_data
+
+                # Khong luu vao self._cache_data de lan sau thu lai ngay
+                return {
+                    "regime": "UPDATING",
+                    "regime_vn": "DANG CAP NHAT",
                     "is_buy_allowed": True,
                     "risk_level": "TRUNG BINH",
-                    "vnindex_close": 1280.0,
-                    "ema20": 1275.0,
-                    "ema50": 1260.0,
-                    "trend_slope": 0.15,
-                    "status_message": "Thi truong tich luy di ngang: Cho phep mua tham do 30-40% tai nen kiet cung.",
+                    "vnindex_close": 0.0,
+                    "ema20": 0.0,
+                    "ema50": 0.0,
+                    "trend_slope": 0.0,
+                    "status_message": "Dang dong bo du lieu nen VN-INDEX tu so giao dich.",
                     "updated_at": date.today().strftime("%Y-%m-%d")
                 }
-                self._cache_data = res
-                self._cache_time = now
-                return res
 
             closes = df["close"].astype(float).values
             highs = df["high"].astype(float).values
@@ -166,17 +170,19 @@ class MarketRegimeGate:
 
         except Exception as e:
             logger.error("Loi khi tinh Market Regime Gate: %s", e)
+            if self._cache_data is not None and self._cache_data.get("vnindex_close", 0) > 0:
+                return self._cache_data
             return {
-                "regime": "SIDEWAYS",
-                "regime_vn": "TICH LUY",
+                "regime": "UPDATING",
+                "regime_vn": "DANG CAP NHAT",
                 "is_buy_allowed": True,
                 "risk_level": "TRUNG BINH",
-                "vnindex_close": 1280.0,
-                "ema20": 1275.0,
-                "ema50": 1260.0,
+                "vnindex_close": 0.0,
+                "ema20": 0.0,
+                "ema50": 0.0,
                 "trend_slope": 0.0,
                 "rsi": 50.0,
-                "status_message": "He thong dang theo doi che do thi truong.",
+                "status_message": "Dang khoi tao du lieu chi so VN-INDEX.",
                 "updated_at": date.today().strftime("%Y-%m-%d")
             }
 

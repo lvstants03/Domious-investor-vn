@@ -149,59 +149,51 @@ class SmartPaperPortfolioManager:
             }
 
     async def _seed_initial_paper_positions(self, session):
-        """Khoi tao vi the ban dau theo cac ma ca map dang gom de nguoi dung theo doi ngay"""
-        sample_buys = [
-            {"symbol": "FPT", "qty": 2000, "price": 125000.0, "current": 139500.0},  # +11.6% (dat chi tieu >= 10%)
-            {"symbol": "PNJ", "qty": 3000, "price": 92000.0, "current": 103500.0},    # +12.5% (dat chi tieu >= 10%)
-            {"symbol": "CTG", "qty": 5000, "price": 34500.0, "current": 37200.0},     # +7.8% (dang tich luy vi the)
-            {"symbol": "MCH", "qty": 1500, "price": 185000.0, "current": 208000.0}   # +12.4% (dat chi tieu >= 10%)
-        ]
-        for s in sample_buys:
-            p = Position(
-                symbol=s["symbol"],
-                quantity=s["qty"],
-                avg_cost=s["price"],
-                current_price=s["current"],
-                unrealized_pnl=(s["current"] - s["price"]) * s["qty"],
-                unrealized_pnl_pct=((s["current"] - s["price"]) / s["price"]) * 100,
-                mode="paper",
-                updated_at=datetime.utcnow()
-            )
-            session.add(p)
+        """Khoi tao vi the ban dau theo gia thuc te tren san TCBS, loai bo hoan toan du lieu mau cu"""
+        from src.tcbs.market import market_client
+        target_symbols = ["FPT", "MWG", "TCB", "HPG"]
+        target_alloc_vnd = 200_000_000.0  # 200 Trieu VND / ma
 
-            # Ghi lai trade mua
-            t = Trade(
-                symbol=s["symbol"],
-                action="BUY",
-                quantity=s["qty"],
-                price=s["price"],
-                total_value=s["price"] * s["qty"],
-                mode="paper",
-                status="FILLED",
-                created_at=datetime.utcnow()
-            )
-            session.add(t)
+        for sym in target_symbols:
+            try:
+                p_info = await market_client.get_price_info(sym)
+                price = float(p_info.get("price") or 0.0)
+                if price <= 0:
+                    continue
 
-        # Ghi mot vai trade SELL da chot loi de co ti le win rate
-        sample_sales = [
-            {"symbol": "MWG", "qty": 2500, "buy_p": 58000.0, "sell_p": 66000.0, "pnl": 20000000.0, "pnl_pct": 13.79},
-            {"symbol": "HPG", "qty": 4000, "buy_p": 27000.0, "sell_p": 30200.0, "pnl": 12800000.0, "pnl_pct": 11.85},
-            {"symbol": "SSI", "qty": 3000, "buy_p": 32000.0, "sell_p": 35500.0, "pnl": 10500000.0, "pnl_pct": 10.94}
-        ]
-        for sl in sample_sales:
-            t_sell = Trade(
-                symbol=sl["symbol"],
-                action="SELL",
-                quantity=sl["qty"],
-                price=sl["sell_p"],
-                total_value=sl["sell_p"] * sl["qty"],
-                mode="paper",
-                status="FILLED",
-                pnl=sl["pnl"],
-                pnl_pct=sl["pnl_pct"],
-                created_at=datetime.utcnow()
-            )
-            session.add(t_sell)
+                # Tinh khoi luong theo lo 100 chuan HOSE
+                qty = int((target_alloc_vnd / price) // 100) * 100
+                if qty <= 0:
+                    qty = 100
+
+                total_cost = price * qty
+
+                p = Position(
+                    symbol=sym,
+                    quantity=qty,
+                    avg_cost=price,
+                    current_price=price,
+                    unrealized_pnl=0.0,
+                    unrealized_pnl_pct=0.0,
+                    mode="paper",
+                    updated_at=datetime.utcnow()
+                )
+                session.add(p)
+
+                # Ghi lai trade mua ban dau voi gia that
+                t = Trade(
+                    symbol=sym,
+                    action="BUY",
+                    quantity=qty,
+                    price=price,
+                    total_value=total_cost,
+                    mode="paper",
+                    status="FILLED",
+                    created_at=datetime.utcnow()
+                )
+                session.add(t)
+            except Exception as e:
+                logger.warning("Loi khi lay gia TCBS khoi tao paper cho ma %s: %s", sym, str(e))
 
         await session.commit()
 

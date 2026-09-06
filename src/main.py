@@ -64,6 +64,10 @@ async def lifespan(app: FastAPI):
     # Chay ngay 1 vong crawl va phan loai tin moi nhat o background khi khoi dong
     asyncio.create_task(media_scheduler.job_crawl_and_classify())
 
+    # Khoi dong Background Warming de cache truoc du lieu Position Hunter trong RAM (< 50ms)
+    from src.engine.position_hunter_predictor import position_hunter_predictor
+    position_hunter_predictor.start_background_warming()
+
     yield
     logger.info("Đang tắt dịch vụ DOMINUS Investor...")
 

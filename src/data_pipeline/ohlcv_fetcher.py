@@ -25,7 +25,19 @@ class OHLCVFetcher:
         
         def _do_fetch():
             from vnstock.api.quote import Quote
-            # Thu cac nguon on dinh nhat truoc
+            sym_upper = symbol.upper()
+            # Neu la chi so thi truong, dung provider mac dinh cua Quote khong qua KBS/MSN
+            if sym_upper in ("VNINDEX", "VN30", "HNXINDEX", "UPCOMINDEX", "VN100"):
+                try:
+                    q = Quote(symbol=sym_upper)
+                    df = q.history(start=start_date, end=end_date, interval="1D")
+                    if df is not None and not df.empty:
+                        return df
+                except Exception as e:
+                    logger.debug("Loi khi lay nen chi so %s: %s", sym_upper, str(e))
+                return None
+
+            # Voi co phieu thong thuong, thu cac nguon on dinh nhat truoc
             for src in ["kbs", "msn", "vci"]:
                 try:
                     q = Quote(symbol=symbol, source=src)
@@ -37,12 +49,13 @@ class OHLCVFetcher:
             return None
 
         try:
+            timeout_limit = 6.0 if symbol.upper() in ("VNINDEX", "VN30", "HNXINDEX", "UPCOMINDEX", "VN100") else 4.0
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                 future = executor.submit(_do_fetch)
                 try:
-                    df = future.result(timeout=2.0)
+                    df = future.result(timeout=timeout_limit)
                 except concurrent.futures.TimeoutError:
-                    logger.debug("Fetch OHLCV %s timeout (>2s), bo qua", symbol)
+                    logger.debug("Fetch OHLCV %s timeout (>%.1fs), bo qua", symbol, timeout_limit)
                     return None
 
             if df is None or df.empty:
